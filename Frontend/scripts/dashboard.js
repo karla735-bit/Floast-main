@@ -1,106 +1,177 @@
-import { getProperties, addProperty, updateProperty, deleteProperty } from "./propertyService.js";
-import { generateEmptyUnits } from "./unitService.js";
-import { onAuthChange } from "./auth.js";
+// ============================================================
+//  FLOAST — dashboard.js
+// ============================================================
 
-function createIcons() {
-  if (typeof lucide !== "undefined") {
-    lucide.createIcons();
+import { getProperties, addProperty, updateProperty, deleteProperty } from "./propertyService.js";
+import { onAuthChange, logoutUser } from "./auth.js";
+import { openProfileModal } from "./profile.js";
+import { getUserPlan, canAddProperty } from "./planService.js";
+import { renderPlanBadge, showLimitModal } from "./planGate.js";
+
+// ── Auth ──────────────────────────────────────────────────────
+onAuthChange(async (user) => {
+  if (!user) { window.location.href = "login.html"; return; }
+
+  // Intentar cargar perfil completo desde Firestore
+  try {
+    const { db } = await import("./firebase.js");
+    const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js");
+    const snap = await getDoc(doc(db, "users", user.uid));
+    const profile = snap.exists() ? snap.data() : {};
+    const fullUser = { ...user, ...profile };
+    sessionStorage.setItem("floast_user", JSON.stringify(fullUser));
+    updateHeaderUser(fullUser);
+  } catch {
+    updateHeaderUser(user);
+  }
+});
+
+function updateHeaderUser(user) {
+  const name = user.name || user.displayName || user.email || "Usuario";
+  document.getElementById("userName").textContent       = name;
+  document.getElementById("avatarInitials").textContent = getInitials(name);
+
+  // Mostrar foto de perfil si tiene avatar guardado
+  const avatarEl  = document.getElementById("avatarBtn");
+  const initialsEl= document.getElementById("avatarInitials");
+  let imgEl       = document.getElementById("avatarHeaderImg");
+
+  if (user.avatar) {
+    if (!imgEl) {
+      imgEl = document.createElement("img");
+      imgEl.id        = "avatarHeaderImg";
+      imgEl.alt       = "Avatar";
+      imgEl.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:50%;position:absolute;inset:0;";
+      avatarEl.style.position = "relative";
+      avatarEl.appendChild(imgEl);
+    }
+    imgEl.src          = "../assets/resources/" + user.avatar;
+    imgEl.hidden       = false;
+    initialsEl.style.opacity = "0";
+    imgEl.onerror = () => { imgEl.hidden = true; initialsEl.style.opacity = "1"; };
   } else {
-    setTimeout(createIcons, 50);
+    if (imgEl) imgEl.hidden = true;
+    initialsEl.style.opacity = "1";
   }
 }
 
-onAuthChange((user) => {
-  if (!user) {
+// ── DOM ───────────────────────────────────────────────────────
+const grid        = document.getElementById("propertiesGrid");
+
+// ── Cerrar sesión ─────────────────────────────────────────────
+document.getElementById("btnLogout").addEventListener("click", async () => {
+  try {
+    await logoutUser();
+  } finally {
+    sessionStorage.clear();
     window.location.href = "login.html";
-    return;
   }
-  const name = user.name || user.displayName || user.email || "Usuario";
-  const initials = getInitials(name);
-  document.getElementById("userName").textContent = name;
-  document.getElementById("avatarInitials").textContent = initials;
 });
 
-const grid = document.getElementById("propertiesGrid");
-const addCard = document.getElementById("btnAddCard");
-const btnNew = document.getElementById("btnNewProperty");
+// ── Avatar → modal de perfil ──────────────────────────────────
+document.getElementById("avatarBtn").addEventListener("click", () => {
+  const storedUser = JSON.parse(sessionStorage.getItem("floast_user") || "{}");
+  openProfileModal(storedUser, (updatedUser) => {
+    updateHeaderUser(updatedUser);
+  });
+});
+
+const addCard     = document.getElementById("btnAddCard");
+const btnNew      = document.getElementById("btnNewProperty");
 const btnEmptyNew = document.getElementById("btnEmptyNew");
-const emptyState = document.getElementById("emptyState");
 const searchInput = document.getElementById("searchInput");
 
-const modalProperty = document.getElementById("modalProperty");
-const modalTitle = document.getElementById("modalTitle");
-const modalClose = document.getElementById("modalClose");
-const modalCancel = document.getElementById("modalCancel");
-const propertyForm = document.getElementById("propertyForm");
-const propIdInput = document.getElementById("propertyId");
-const propName = document.getElementById("propName");
-const propType = document.getElementById("propType");
-const propMode = document.getElementById("propMode");
-const propLocation = document.getElementById("propLocation");
-const propPrice = document.getElementById("propPrice");
-const propStatus = document.getElementById("propStatus");
+// Modal propiedad
+const modalProperty       = document.getElementById("modalProperty");
+const modalTitle          = document.getElementById("modalTitle");
+const modalClose          = document.getElementById("modalClose");
+const modalCancel         = document.getElementById("modalCancel");
+const propertyForm        = document.getElementById("propertyForm");
+const propIdInput         = document.getElementById("propertyId");
+const propStepsIndicator  = document.getElementById("propStepsIndicator");
 
-// Campos dinámicos
-const groupRooms = document.getElementById("groupRooms");
-const propRooms = document.getElementById("propRooms");
-const groupBaths = document.getElementById("groupBaths");
-const propBaths = document.getElementById("propBaths");
-const groupUnits = document.getElementById("groupUnits");
-const propUnits = document.getElementById("propUnits");
-const groupNotes = document.getElementById("groupNotes");
-const propNotes = document.getElementById("propNotes");
+// Paso 1
+const propStep1      = document.getElementById("propStep1");
+const typeVivienda   = document.getElementById("typeVivienda");
+const typeEdificio   = document.getElementById("typeEdificio");
+const buildingTypeRow= document.getElementById("buildingTypeRow");
+const buildingNormal = document.getElementById("buildingNormal");
+const buildingHibrido= document.getElementById("buildingHibrido");
+const step1Next      = document.getElementById("step1Next");
 
-const modalDelete = document.getElementById("modalDelete");
-const deleteClose = document.getElementById("deleteClose");
-const deleteCancel = document.getElementById("deleteCancel");
-const deleteConfirm = document.getElementById("deleteConfirm");
+// Paso 2
+const propStep2      = document.getElementById("propStep2");
+const rentCompleto   = document.getElementById("rentCompleto");
+const rentIndividual = document.getElementById("rentIndividual");
+const step2Back      = document.getElementById("step2Back");
+const step2Next      = document.getElementById("step2Next");
+
+// Paso 3
+const propStep3        = document.getElementById("propStep3");
+const propName         = document.getElementById("propName");
+const propLocation     = document.getElementById("propLocation");
+const propPriceGroup   = document.getElementById("propPriceGroup");
+const propPrice        = document.getElementById("propPrice");
+const propStatus       = document.getElementById("propStatus");
+const propDescription  = document.getElementById("propDescription");
+const propHabCount     = document.getElementById("propHabCount");
+const propHabLabel     = document.getElementById("propHabLabel");
+const propLocalGroup   = document.getElementById("propLocalGroup");
+const propLocalCount   = document.getElementById("propLocalCount");
+const step3Back        = document.getElementById("step3Back");
+const modalSubmit      = document.getElementById("modalSubmit");
+
+// Paso edición
+const propStepEdit         = document.getElementById("propStepEdit");
+const editPropName         = document.getElementById("editPropName");
+const editPropLocation     = document.getElementById("editPropLocation");
+const editPriceGroup       = document.getElementById("editPriceGroup");
+const editPropPrice        = document.getElementById("editPropPrice");
+const editPropStatus       = document.getElementById("editPropStatus");
+const editPropDescription  = document.getElementById("editPropDescription");
+const editPropHabCount     = document.getElementById("editPropHabCount");
+const editHabLabel         = document.getElementById("editHabLabel");
+const editLocalGroup       = document.getElementById("editLocalGroup");
+const editPropLocalCount   = document.getElementById("editPropLocalCount");
+const editSubmit           = document.getElementById("editSubmit");
+
+// Modal eliminar
+const modalDelete    = document.getElementById("modalDelete");
+const deleteClose    = document.getElementById("deleteClose");
+const deleteCancel   = document.getElementById("deleteCancel");
+const deleteConfirm  = document.getElementById("deleteConfirm");
 const deletePropName = document.getElementById("deletePropName");
 
-let allProperties = [];
+// ── Estado del formulario de nueva propiedad ──────────────────
+let formState = { type: null, buildingType: null, rentMode: null };
+let allProperties  = [];
 let deleteTargetId = null;
 
-const TYPE_ICONS = {
-  vivienda: "house",
-  edificio: "building-2",
-};
+// ── Iconos por tipo ───────────────────────────────────────────
+const TYPE_ICONS = { vivienda: "house", edificio: "building-2" };
+const TYPE_LABELS = { vivienda: "Vivienda", edificio: "Edificio" };
+const RENT_LABELS = { completo: "Completo", individual: "Por unidades" };
+const BUILDING_LABELS = { normal: "Normal", hibrido: "Híbrido" };
+const STATUS_LABELS = { disponible: "Disponible", rentada: "Rentada", mantenimiento: "Mantenimiento" };
 
-const TYPE_LABELS = {
-  vivienda: "Vivienda",
-  edificio: "Edificio",
-};
-
+// ── Inicialización ────────────────────────────────────────────
 async function init() {
   try {
     allProperties = await getProperties();
     renderGrid(allProperties);
+    renderPlanBadge();
+    lucide.createIcons();
   } catch (err) {
     console.error("Error cargando propiedades:", err);
   }
 }
-
 init();
 
-// Lógica de mostrar/ocultar campos dinámicos
-propMode.addEventListener("change", (e) => {
-  const isCompleta = e.target.value === "completa";
-  groupRooms.hidden = !isCompleta;
-  groupBaths.hidden = !isCompleta;
-  groupNotes.hidden = !isCompleta; // Mostramos notas si es completa
-  
-  groupUnits.hidden = isCompleta;
-});
-
+// ── Renderizado grid ──────────────────────────────────────────
 function renderGrid(properties) {
   grid.querySelectorAll(".property-card").forEach(c => c.remove());
-  emptyState.hidden = properties.length > 0;
-  if (properties.length === 0) {
-    addCard.style.display = "flex";
-    return;
-  }
-  addCard.style.display = "flex";
-  properties.forEach((prop, index) => {
-    const card = buildCard(prop, index);
+  properties.forEach((prop, i) => {
+    const card = buildCard(prop, i);
     grid.insertBefore(card, addCard);
   });
   lucide.createIcons();
@@ -112,11 +183,13 @@ function buildCard(prop, index) {
   card.dataset.id = prop.id;
   card.style.animationDelay = `${index * 60}ms`;
 
-  const icon = TYPE_ICONS[prop.type] || "building";
-  const typeLabel = TYPE_LABELS[prop.type] || prop.type;
-  const modeLabel = prop.rentMode === "completa" ? "Completa" : "Individual";
-  const unitsLabel = prop.rentMode === "individual" ? `${prop.units} hab.` : `${prop.rooms || 0} hab.`;
-  const priceFormatted = Number(prop.price).toLocaleString("es-MX");
+  const icon         = TYPE_ICONS[prop.type] || "building";
+  const typeLabel    = TYPE_LABELS[prop.type] || prop.type;
+  const rentLabel    = RENT_LABELS[prop.rentMode] || "";
+  const buildLabel   = prop.buildingType ? ` · ${BUILDING_LABELS[prop.buildingType]}` : "";
+  const priceStr     = prop.rentMode === "completo"
+    ? `$${Number(prop.price).toLocaleString("es-MX")}<span>/ mes</span>`
+    : `<span style="font-size:0.78rem;color:var(--color-text-dim)">Precio por unidad</span>`;
 
   card.innerHTML = `
     <div class="card-illustration" data-type="${prop.type}">
@@ -124,14 +197,16 @@ function buildCard(prop, index) {
       <span class="status-badge" data-status="${prop.status}">${capitalize(prop.status)}</span>
     </div>
     <div class="card-body">
-      <p class="card-type">${typeLabel} - ${modeLabel}</p>
+      <p class="card-type">${typeLabel}${buildLabel} · ${rentLabel}</p>
       <p class="card-name">${prop.name}</p>
       <div class="card-meta">
         <span class="card-meta-item"><i data-lucide="map-pin"></i>${prop.location}</span>
-        <span class="card-meta-item"><i data-lucide="${icon}"></i>${unitsLabel}</span>
+        ${prop.habCount ? `<span class="card-meta-item"><i data-lucide="door-open"></i>${prop.habCount} hab.</span>` : ""}
+        ${prop.localCount ? `<span class="card-meta-item"><i data-lucide="store"></i>${prop.localCount} locales</span>` : ""}
       </div>
+      ${prop.description ? `<p class="card-desc">${prop.description}</p>` : ""}
       <div class="card-footer">
-        <p class="card-price">$${priceFormatted}<span>/ mes</span></p>
+        <p class="card-price">${priceStr}</p>
         <div class="card-actions">
           <button class="card-btn edit-btn" data-id="${prop.id}" title="Editar"><i data-lucide="pencil"></i></button>
           <button class="card-btn danger delete-btn" data-id="${prop.id}" title="Eliminar"><i data-lucide="trash-2"></i></button>
@@ -140,127 +215,291 @@ function buildCard(prop, index) {
     </div>
   `;
 
-  card.addEventListener("click", (e) => {
+  card.addEventListener("click", e => {
     if (e.target.closest(".card-btn")) return;
     window.location.href = `property.html?id=${prop.id}`;
   });
-
-  card.querySelector(".edit-btn").addEventListener("click", (e) => {
-    e.stopPropagation();
-    openEditModal(prop);
-  });
-
-  card.querySelector(".delete-btn").addEventListener("click", (e) => {
-    e.stopPropagation();
-    openDeleteModal(prop);
-  });
-
+  card.querySelector(".edit-btn").addEventListener("click", e => { e.stopPropagation(); openEditModal(prop); });
+  card.querySelector(".delete-btn").addEventListener("click", e => { e.stopPropagation(); openDeleteModal(prop); });
   return card;
 }
 
+// ── Búsqueda ──────────────────────────────────────────────────
 searchInput.addEventListener("input", () => {
   const q = searchInput.value.trim().toLowerCase();
-  const filtered = allProperties.filter(p =>
-    p.name.toLowerCase().includes(q) ||
-    p.location.toLowerCase().includes(q) ||
-    p.type.toLowerCase().includes(q)
-  );
-  renderGrid(filtered);
+  renderGrid(allProperties.filter(p =>
+    p.name.toLowerCase().includes(q) || p.location.toLowerCase().includes(q)
+  ));
 });
 
-[btnNew, btnEmptyNew, addCard, btnAddCard].forEach(btn => {
-  btn?.addEventListener("click", openNewModal);
-});
+// ── Modal nueva propiedad — pasos ─────────────────────────────
+[btnNew, btnEmptyNew, addCard].forEach(btn => btn?.addEventListener("click", handleNewPropertyClick));
+
+function handleNewPropertyClick() {
+  // Verificamos el límite al confirmar tipo en paso 1,
+  // no aquí, porque aún no sabemos qué tipo va a agregar.
+  openNewModal();
+}
 
 function openNewModal() {
   propIdInput.value = "";
   propertyForm.reset();
-  propMode.dispatchEvent(new Event("change")); 
-  clearFormErrors();
+  formState = { type: null, buildingType: null, rentMode: null };
+
+  // Resetear selecciones visuales
+  [typeVivienda, typeEdificio, buildingNormal, buildingHibrido, rentCompleto, rentIndividual]
+    .forEach(b => b.classList.remove("selected"));
+  buildingTypeRow.hidden  = true;
+  propLocalGroup.hidden   = true;
+
+  // Asegurar que el paso de edición esté oculto
+  propStepEdit.classList.remove("active");
+
+  // Mostrar pasos, ocultar edición
+  propStepsIndicator.hidden = false;
+  goToStep(1);
+
   modalTitle.textContent = "Nueva Propiedad";
-  document.getElementById("modalSubmit").textContent = "Guardar Propiedad";
   showModal(modalProperty);
 }
 
-function openEditModal(prop) {
-  propIdInput.value = prop.id;
-  propName.value = prop.name;
-  propType.value = prop.type;
-  propMode.value = prop.rentMode;
-  propLocation.value = prop.location;
-  propPrice.value = prop.price;
-  propStatus.value = prop.status;
-  
-  propRooms.value = prop.rooms || "";
-  propBaths.value = prop.baths || "";
-  propUnits.value = prop.units || "";
-  propNotes.value = prop.notes || ""; 
-  
-  propMode.dispatchEvent(new Event("change"));
-  clearFormErrors();
-  modalTitle.textContent = "Editar Propiedad";
-  document.getElementById("modalSubmit").textContent = "Guardar Cambios";
-  showModal(modalProperty);
-}
+// Paso 1: selección de tipo
+[typeVivienda, typeEdificio].forEach(btn => {
+  btn.addEventListener("click", () => {
+    [typeVivienda, typeEdificio].forEach(b => b.classList.remove("selected"));
+    btn.classList.add("selected");
+    formState.type = btn.dataset.value;
+    formState.buildingType = null;
+    [buildingNormal, buildingHibrido].forEach(b => b.classList.remove("selected"));
 
-[modalClose, modalCancel].forEach(btn => {
-  btn.addEventListener("click", () => hideModal(modalProperty));
+    if (formState.type === "edificio") {
+      buildingTypeRow.hidden = false;
+    } else {
+      buildingTypeRow.hidden = true;
+      formState.buildingType = null;
+    }
+    lucide.createIcons();
+  });
 });
 
-propertyForm.addEventListener("submit", async (e) => {
+[buildingNormal, buildingHibrido].forEach(btn => {
+  btn.addEventListener("click", () => {
+    [buildingNormal, buildingHibrido].forEach(b => b.classList.remove("selected"));
+    btn.classList.add("selected");
+    formState.buildingType = btn.dataset.value;
+  });
+});
+
+step1Next.addEventListener("click", () => {
+  if (!formState.type) { alert("Selecciona el tipo de inmueble."); return; }
+  if (formState.type === "edificio" && !formState.buildingType) { alert("Selecciona el tipo de edificio."); return; }
+
+  // Verificar límite del plan
+  const plan   = getUserPlan();
+  const result = canAddProperty(plan, allProperties, formState.type);
+
+  if (!result.allowed) {
+    hideModal(modalProperty);
+    showLimitModal(
+      formState.type,
+      // Continuar con Spark: no hacemos nada
+      () => {},
+      // Upgrade a Sparkle: actualizar badge y reabrir modal
+      () => {
+        renderPlanBadge();
+        openNewModal();
+        goToStep(2);
+      }
+    );
+    return;
+  }
+
+  goToStep(2);
+});
+
+// Paso 2: modo de renta
+[rentCompleto, rentIndividual].forEach(btn => {
+  btn.addEventListener("click", () => {
+    [rentCompleto, rentIndividual].forEach(b => b.classList.remove("selected"));
+    btn.classList.add("selected");
+    formState.rentMode = btn.dataset.value;
+    lucide.createIcons();
+  });
+});
+
+step2Back.addEventListener("click", () => goToStep(1));
+step2Next.addEventListener("click", () => {
+  if (!formState.rentMode) { alert("Selecciona cómo se rentará el inmueble."); return; }
+
+  // Precio solo si completo
+  propPriceGroup.hidden = formState.rentMode !== "completo";
+
+  // Etiqueta de habitaciones según tipo
+  if (formState.type === "vivienda") {
+    propHabLabel.textContent = "Número de habitaciones";
+  } else {
+    propHabLabel.textContent = "Número de habitaciones / cuartos";
+  }
+
+  // Locales solo en edificio híbrido
+  propLocalGroup.hidden = !(formState.type === "edificio" && formState.buildingType === "hibrido");
+
+  goToStep(3);
+});
+
+// Paso 3: datos
+step3Back.addEventListener("click", () => goToStep(2));
+
+function goToStep(n) {
+  [propStep1, propStep2, propStep3].forEach((s, i) => s.classList.toggle("active", i === n - 1));
+
+  const dots = [
+    document.getElementById("pDot1"),
+    document.getElementById("pDot2"),
+    document.getElementById("pDot3"),
+  ];
+  const conns = [
+    document.getElementById("pConn1"),
+    document.getElementById("pConn2"),
+  ];
+
+  dots.forEach((d, i) => {
+    d.classList.remove("active", "completed");
+    if (i < n - 1)      { d.classList.add("completed"); d.querySelector(".dot").textContent = "✓"; }
+    else if (i === n - 1){ d.classList.add("active");    d.querySelector(".dot").textContent = i + 1; }
+    else                  {                               d.querySelector(".dot").textContent = i + 1; }
+  });
+  conns.forEach((c, i) => c.classList.toggle("completed", i < n - 1));
+}
+
+// ── Submit nueva propiedad ────────────────────────────────────
+propertyForm.addEventListener("submit", async e => {
   e.preventDefault();
-  if (!validatePropertyForm()) return;
+  const isEdit = !!propIdInput.value;
+  if (isEdit) { await handleEdit(); return; }
 
-  const submitBtn = document.getElementById("modalSubmit");
-  submitBtn.disabled = true;
-  submitBtn.textContent = "Guardando…";
+  if (!validateStep3()) return;
 
-  const isIndividual = propMode.value === "individual";
+  modalSubmit.disabled = true;
+  modalSubmit.textContent = "Guardando…";
 
   const data = {
-    name: propName.value.trim(),
-    type: propType.value,
-    rentMode: propMode.value,
-    location: propLocation.value.trim(),
-    price: Number(propPrice.value),
-    status: propStatus.value,
-    units: isIndividual ? Number(propUnits.value) : 1,
-    rooms: !isIndividual ? Number(propRooms.value) : null,
-    baths: !isIndividual ? Number(propBaths.value) : null,
-    notes: !isIndividual ? propNotes.value.trim() : "", 
+    name:         propName.value.trim(),
+    type:         formState.type,
+    buildingType: formState.buildingType,
+    rentMode:     formState.rentMode,
+    location:     propLocation.value.trim(),
+    price:        formState.rentMode === "completo" ? Number(propPrice.value) : null,
+    status:       propStatus.value,
+    description:  propDescription.value.trim(),
+    habCount:     Number(propHabCount.value) || 0,
+    localCount:   (formState.type === "edificio" && formState.buildingType === "hibrido")
+                  ? (Number(propLocalCount.value) || 0)
+                  : 0,
   };
 
   try {
-    const id = propIdInput.value;
-    if (id) {
-      await updateProperty(id, data);
-      const idx = allProperties.findIndex(p => p.id === id);
-      if (idx !== -1) allProperties[idx] = { id, ...data };
-    } else {
-      const newProp = await addProperty(data);
-      if (isIndividual) {
-        await generateEmptyUnits(newProp.id, data.units, data.price);
-      }
-      allProperties.push(newProp);
-    }
+    const newProp = await addProperty(data);
+    allProperties.push(newProp);
     renderGrid(allProperties);
-    lucide.createIcons();
     hideModal(modalProperty);
   } catch (err) {
     console.error("Error guardando propiedad:", err);
   } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = propIdInput.value ? "Guardar Cambios" : "Guardar Propiedad";
+    modalSubmit.disabled = false;
+    modalSubmit.textContent = "Guardar Propiedad";
   }
 });
 
+function validateStep3() {
+  let valid = true;
+  if (!propName.value.trim())     { setErr("propName","propNameError","Obligatorio."); valid=false; } else clearErr("propName","propNameError");
+  if (!propLocation.value.trim()) { setErr("propLocation","propLocationError","Obligatorio."); valid=false; } else clearErr("propLocation","propLocationError");
+  if (!propHabCount.value || Number(propHabCount.value) < 1) { setErr("propHabCount","propHabCountError","Ingresa al menos 1."); valid=false; } else clearErr("propHabCount","propHabCountError");
+  if (formState.type === "edificio" && formState.buildingType === "hibrido" && (!propLocalCount.value || Number(propLocalCount.value) < 0)) {
+    setErr("propLocalCount","propLocalCountError","Ingresa el número de locales."); valid=false;
+  } else clearErr("propLocalCount","propLocalCountError");
+  if (formState.rentMode === "completo" && !propPrice.value) { setErr("propPrice","propPriceError","Ingresa el precio."); valid=false; } else clearErr("propPrice","propPriceError");
+  if (!propStatus.value) { setErr("propStatus","propStatusError","Selecciona un estado."); valid=false; } else clearErr("propStatus","propStatusError");
+  return valid;
+}
+
+// ── Editar propiedad ──────────────────────────────────────────
+function openEditModal(prop) {
+  propIdInput.value = prop.id;
+  // Modo edición: limpiar pasos y mostrar solo el de edición
+  propStepsIndicator.hidden = true;
+  [propStep1, propStep2, propStep3].forEach(s => s.classList.remove("active"));
+  propStepEdit.classList.remove("active"); // asegurar limpio antes de activar
+  propStepEdit.classList.add("active");
+
+  editPropName.value        = prop.name;
+  editPropLocation.value    = prop.location;
+  editPropStatus.value      = prop.status;
+  editPropDescription.value = prop.description || "";
+  editPriceGroup.hidden     = prop.rentMode !== "completo";
+  editPropPrice.value       = prop.price || "";
+
+  // Unidades
+  editPropHabCount.value  = prop.habCount || "";
+  editHabLabel.textContent = prop.type === "vivienda" ? "Número de habitaciones" : "Número de habitaciones / cuartos";
+  const isHibrido = prop.type === "edificio" && prop.buildingType === "hibrido";
+  editLocalGroup.hidden    = !isHibrido;
+  editPropLocalCount.value = isHibrido ? (prop.localCount || "") : "";
+
+  modalTitle.textContent = "Editar Propiedad";
+  showModal(modalProperty);
+}
+
+async function handleEdit() {
+  editSubmit.disabled = true;
+  editSubmit.textContent = "Guardando…";
+
+  const id   = propIdInput.value;
+  const prop = allProperties.find(p => p.id === id);
+
+  const isHibrido = prop?.type === "edificio" && prop?.buildingType === "hibrido";
+  const data = {
+    name:        editPropName.value.trim(),
+    location:    editPropLocation.value.trim(),
+    status:      editPropStatus.value,
+    description: editPropDescription.value.trim(),
+    price:       prop?.rentMode === "completo" ? Number(editPropPrice.value) : null,
+    habCount:    Number(editPropHabCount.value) || 0,
+    localCount:  isHibrido ? (Number(editPropLocalCount.value) || 0) : 0,
+  };
+
+  try {
+    await updateProperty(id, data);
+    const idx = allProperties.findIndex(p => p.id === id);
+    if (idx !== -1) allProperties[idx] = { ...allProperties[idx], ...data };
+    renderGrid(allProperties);
+    hideModal(modalProperty);
+  } catch (err) {
+    console.error("Error editando propiedad:", err);
+  } finally {
+    editSubmit.disabled = false;
+    editSubmit.textContent = "Guardar Cambios";
+  }
+}
+
+[modalClose, modalCancel].forEach(btn => btn?.addEventListener("click", () => {
+  propStepEdit.classList.remove("active");
+  [propStep1, propStep2, propStep3].forEach(s => s.classList.remove("active"));
+  propStepsIndicator.hidden = false;
+  hideModal(modalProperty);
+}));
+modalProperty.addEventListener("click", e => { if (e.target === modalProperty) hideModal(modalProperty); });
+
+// ── Modal eliminar ────────────────────────────────────────────
 function openDeleteModal(prop) {
   deleteTargetId = prop.id;
   deletePropName.textContent = prop.name;
   showModal(modalDelete);
 }
 
-[deleteClose, deleteCancel].forEach(btn => btn.addEventListener("click", () => hideModal(modalDelete)));
+[deleteClose, deleteCancel].forEach(btn => btn.addEventListener("click", () => { deleteTargetId = null; hideModal(modalDelete); }));
+modalDelete.addEventListener("click", e => { if (e.target === modalDelete) hideModal(modalDelete); });
 
 deleteConfirm.addEventListener("click", async () => {
   if (!deleteTargetId) return;
@@ -270,10 +509,9 @@ deleteConfirm.addEventListener("click", async () => {
     await deleteProperty(deleteTargetId);
     allProperties = allProperties.filter(p => p.id !== deleteTargetId);
     renderGrid(allProperties);
-    lucide.createIcons();
     hideModal(modalDelete);
   } catch (err) {
-    console.error("Error eliminando propiedad:", err);
+    console.error("Error eliminando:", err);
   } finally {
     deleteConfirm.disabled = false;
     deleteConfirm.textContent = "Sí, eliminar";
@@ -281,42 +519,18 @@ deleteConfirm.addEventListener("click", async () => {
   }
 });
 
-function validatePropertyForm() {
-  let valid = true;
-  if (!propName.value.trim()) { setFieldError("propName", "propNameError", "El nombre es obligatorio."); valid = false; } else clearFieldError("propName", "propNameError");
-  if (!propType.value) { setFieldError("propType", "propTypeError", "Selecciona un tipo."); valid = false; } else clearFieldError("propType", "propTypeError");
-  if (!propMode.value) { setFieldError("propMode", "propModeError", "Selecciona una modalidad."); valid = false; } else clearFieldError("propMode", "propModeError");
-  if (!propLocation.value.trim()) { setFieldError("propLocation", "propLocationError", "La ubicación es obligatoria."); valid = false; } else clearFieldError("propLocation", "propLocationError");
-  if (propMode.value === "individual" && (!propUnits.value || Number(propUnits.value) < 1)) {
-    setFieldError("propUnits", "propUnitsError", "Ingresa al menos 1 unidad."); valid = false;
-  } else clearFieldError("propUnits", "propUnitsError");
-  if (!propPrice.value || Number(propPrice.value) < 0) { setFieldError("propPrice", "propPriceError", "Ingresa un precio válido."); valid = false; } else clearFieldError("propPrice", "propPriceError");
-  if (!propStatus.value) { setFieldError("propStatus", "propStatusError", "Selecciona un estado."); valid = false; } else clearFieldError("propStatus", "propStatusError");
-  return valid;
-}
-
-function setFieldError(inputId, errorId, msg) {
-  document.getElementById(inputId)?.closest(".form-group")?.classList.add("has-error");
-  const err = document.getElementById(errorId);
-  if (err) err.textContent = msg;
-}
-function clearFieldError(inputId, errorId) {
-  document.getElementById(inputId)?.closest(".form-group")?.classList.remove("has-error");
-  const err = document.getElementById(errorId);
-  if (err) err.textContent = "";
-}
-function clearFormErrors() {
-  propertyForm.querySelectorAll(".form-group").forEach(g => g.classList.remove("has-error"));
-  propertyForm.querySelectorAll(".error-message").forEach(e => e.textContent = "");
-}
-function showModal(modal) { modal.hidden = false; document.body.style.overflow = "hidden"; setTimeout(() => modal.querySelector("input, select, button")?.focus(), 50); }
-function hideModal(modal) { modal.hidden = true; document.body.style.overflow = ""; }
-function getInitials(name) { return name.split(" ").filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join(""); }
-function capitalize(str) { return str.charAt(0).toUpperCase() + str.slice(1); }
-
-document.addEventListener("keydown", (e) => {
+// ── Escape ────────────────────────────────────────────────────
+document.addEventListener("keydown", e => {
   if (e.key === "Escape") {
     if (!modalProperty.hidden) hideModal(modalProperty);
-    if (!modalDelete.hidden) hideModal(modalDelete);
+    if (!modalDelete.hidden)   hideModal(modalDelete);
   }
 });
+
+// ── Helpers ───────────────────────────────────────────────────
+function showModal(m) { m.hidden = false; document.body.style.overflow = "hidden"; setTimeout(() => m.querySelector("input,select,button")?.focus(), 50); }
+function hideModal(m) { m.hidden = true;  document.body.style.overflow = ""; }
+function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ""; }
+function getInitials(name) { return (name||"").split(" ").filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join(""); }
+function setErr(inputId, errorId, msg) { document.getElementById(inputId)?.closest(".form-group")?.classList.add("has-error"); const e=document.getElementById(errorId); if(e) e.textContent=msg; }
+function clearErr(inputId, errorId)    { document.getElementById(inputId)?.closest(".form-group")?.classList.remove("has-error"); const e=document.getElementById(errorId); if(e) e.textContent=""; }

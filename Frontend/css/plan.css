@@ -1,0 +1,317 @@
+/* ============================================================
+   FLOAST — plan.css  |  Badge de plan + Modal de límite + Toast
+   ============================================================ */
+
+/* ── Badge en el header ── */
+/* Vive dentro de .header-user, después de .header-user-info */
+.plan-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 22px;
+  padding: 0 0.55rem;
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.plan-badge-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+/* Spark — gris sutil */
+.plan-badge--spark {
+  color: var(--color-text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--color-border);
+}
+
+/* Sparkle — naranja brillante */
+.plan-badge--sparkle {
+  color: var(--color-accent-bright);
+  background: var(--color-accent-muted);
+  border-color: var(--color-accent-border);
+  box-shadow: 0 0 10px var(--color-accent-glow);
+}
+
+/* Animación al hacer upgrade */
+.plan-badge--upgrading {
+  transform: scale(1.15);
+  opacity: 0.5;
+}
+
+/* ── Modal de límite ── */
+.limit-modal {
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  align-items: center;
+  text-align: center;
+}
+
+/* Icono decorativo */
+.limit-icon-wrap {
+  margin-top: 0.25rem;
+}
+
+.limit-icon-ring {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent-muted);
+  border: 1.5px solid var(--color-accent-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 24px var(--color-accent-glow);
+  animation: pulse 2.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 24px var(--color-accent-glow); }
+  50%       { box-shadow: 0 0 40px var(--color-accent-glow), 0 0 60px rgba(242,112,0,0.15); }
+}
+
+.limit-icon {
+  width: 32px;
+  height: 32px;
+  color: var(--color-accent-bright);
+}
+
+/* Texto */
+.limit-content { max-width: 340px; }
+
+.limit-title {
+  font-family: var(--font-display);
+  font-size: clamp(1rem, 2.5vw, 1.2rem);
+  font-weight: 800;
+  color: var(--color-text-primary);
+  margin-bottom: 0.6rem;
+}
+
+.limit-desc {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+.limit-desc strong { color: var(--color-text-primary); }
+
+/* ── Comparativa de planes ── */
+.plan-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.plan-compare-col {
+  border-radius: var(--radius-card);
+  border: 1px solid var(--color-border);
+  padding: 0.85rem 1rem;
+  text-align: left;
+  transition: border-color 0.2s;
+}
+
+.plan-compare-col--spark {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.plan-compare-col--sparkle {
+  background: var(--color-accent-muted);
+  border-color: var(--color-accent-border);
+  box-shadow: 0 0 16px rgba(242, 112, 0, 0.1);
+}
+
+.plan-compare-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.plan-compare-col--spark   .plan-compare-header { color: var(--color-text-muted); }
+.plan-compare-col--sparkle .plan-compare-header { color: var(--color-accent-bright); }
+
+.plan-compare-header i { width: 14px; height: 14px; }
+
+.plan-compare-label {
+  margin-left: auto;
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-full);
+  background: var(--color-border);
+  color: var(--color-text-dim);
+  font-family: var(--font-body);
+  font-weight: 600;
+}
+
+.plan-compare-label--pro {
+  background: var(--color-accent-border);
+  color: var(--color-accent-bright);
+}
+
+.plan-compare-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.plan-compare-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.plan-compare-list i {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  color: var(--color-success);
+}
+
+.plan-compare-list .icon-no { color: var(--color-text-dim); }
+
+/* ── Acciones del modal de límite ── */
+.limit-actions {
+  display: flex;
+  gap: 0.75rem;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.limit-btn-free {
+  flex: 1;
+  height: 42px;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .limit-btn-free:hover {
+    background: var(--color-bg-input);
+    color: var(--color-text-primary);
+    border-color: var(--color-border-strong);
+  }
+}
+
+/* Botón upgrade — naranja con gradiente */
+.btn-upgrade {
+  flex: 1.6;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+  cursor: pointer;
+  border: none;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-bright) 100%);
+  box-shadow: var(--shadow-btn-accent);
+  transition: filter 0.15s, transform 0.15s;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-upgrade::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 100%);
+  pointer-events: none;
+}
+
+.btn-upgrade i { width: 16px; height: 16px; }
+
+@media (hover: hover) {
+  .btn-upgrade:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-btn-accent-hover);
+  }
+}
+
+.btn-upgrade:active { transform: scale(0.97); }
+
+/* ── Toast ── */
+.floast-toast {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  z-index: 9999;
+  background: #1e1e20;
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-accent-border);
+  border-radius: var(--radius-full);
+  padding: 0.65rem 1.25rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  opacity: 0;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 20px var(--color-accent-glow);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+  max-width: calc(100vw - 2rem);
+  text-align: center;
+}
+
+.floast-toast--visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ── Responsivo ── */
+@media (max-width: 420px) {
+  .plan-compare     { grid-template-columns: 1fr; }
+  .limit-actions    { flex-direction: column; }
+  .limit-btn-free,
+  .btn-upgrade      { flex: none; width: 100%; }
+  .plan-badge span  { display: none; }
+  .plan-badge       { padding: 0 0.5rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .limit-icon-ring  { animation: none; }
+  .plan-badge,
+  .btn-upgrade,
+  .limit-btn-free,
+  .floast-toast     { transition: none; }
+}

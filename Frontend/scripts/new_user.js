@@ -145,7 +145,11 @@ function toggleVisibility(input, btn) {
 }
 
 // ── Fortaleza de contraseña ───────────────────────────────────
-passwordInput.addEventListener("input", () => {
+["input", "change", "keyup"].forEach(evt =>
+  passwordInput.addEventListener(evt, updatePasswordUI)
+);
+
+function updatePasswordUI() {
   const val = passwordInput.value;
   const { level, label } = getPasswordStrength(val);
 
@@ -161,7 +165,7 @@ passwordInput.addEventListener("input", () => {
 
   // Limpiar error mientras escribe
   clearError(passwordInput, "registerPasswordError");
-});
+}
 
 function updateReq(el, met) {
   el.classList.toggle("met", met);
@@ -208,7 +212,7 @@ document.getElementById("registerForm").addEventListener("submit", async (e) => 
   };
 
   try {
-    await registerUser(userData.email, userData.password);
+    await registerUser(userData.email, userData.password, userData);
 
     // ── Aquí puedes guardar el perfil en Firestore cuando esté listo ──
     // await saveUserProfile(userData); // función futura en auth.js

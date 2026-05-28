@@ -22,11 +22,11 @@ body {
   background-color: var(--color-bg-base);
   background-image: var(--gradient-bg);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: clamp(1rem, 4vw, 2rem);
   position: relative;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 /* Grano de textura */
@@ -59,9 +59,8 @@ body::after {
   width: 100%;
   max-width: 480px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  /* Permite scroll si el contenido es muy alto (landscape móvil) */
   padding: 1rem 0;
 }
 

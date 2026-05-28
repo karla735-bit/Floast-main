@@ -1,20 +1,10 @@
 // ============================================================
-//  FLOAST — recover.js
-//  Lógica de UI de recuperación de contraseña (3 pasos).
-//  Solo habla con auth.js — nunca con Firebase directamente.
+//  FLOAST — recover.js (Firebase + 3 pasos visuales)
 //
-//  NOTA IMPORTANTE SOBRE EL FLUJO CON FIREBASE:
-//  Firebase no usa un código OTP manual. Su flujo real es:
-//    Paso 1 → sendPasswordResetEmail() envía un link al correo
-//    El link lleva al usuario a una página de Firebase (o tu
-//    dominio) donde cambia la contraseña directamente.
-//  Por eso, cuando conectes Firebase:
-//    - El paso 2 (código) desaparece o se convierte en un
-//      mensaje de "revisa tu correo".
-//    - El paso 3 (nueva contraseña) lo maneja Firebase en su
-//      propia página, o tú con confirmPasswordReset(oobCode).
-//  El mock actual simula los 3 pasos para que puedas probar
-//  la UI completa mientras no hay backend.
+//  FLUJO:
+//  Paso 1 → Usuario ingresa correo → Firebase envía link real
+//  Paso 2 → Mensaje "revisa tu correo" (decorativo, sin código)
+//  Paso 3 → Confirmación final → regresa al login
 // ============================================================
 
 import { resetPassword, getAuthErrorMessage } from "./auth.js";
@@ -25,17 +15,17 @@ const dots       = [1, 2, 3].map(n => document.getElementById(`dotStep${n}`));
 const connectors = [1, 2].map(n => document.getElementById(`stepConnector${n}`));
 
 // ── Paso 1 ────────────────────────────────────────────────────
-const emailInput  = document.getElementById("recoverEmail");
-const emailError  = document.getElementById("recoverEmailError");
-const sendBtn     = document.getElementById("nextStep1");
+const emailInput    = document.getElementById("recoverEmail");
+const emailError    = document.getElementById("recoverEmailError");
+const sendBtn       = document.getElementById("nextStep1");
 const successBanner = document.getElementById("successBanner");
 
 // ── Paso 2 ────────────────────────────────────────────────────
-const codeInput   = document.getElementById("verificationCode");
-const codeError   = document.getElementById("codeError");
-const verifyBtn   = document.getElementById("nextStep2");
-const backBtn2    = document.getElementById("backStep2");
-const resendBtn   = document.getElementById("resendBtn");
+const codeInput  = document.getElementById("verificationCode");
+const codeError  = document.getElementById("codeError");
+const verifyBtn  = document.getElementById("nextStep2");
+const backBtn2   = document.getElementById("backStep2");
+const resendBtn  = document.getElementById("resendBtn");
 
 // ── Paso 3 ────────────────────────────────────────────────────
 const newPassInput     = document.getElementById("newPassword");
@@ -48,16 +38,12 @@ const toggleConfirm    = document.getElementById("toggleConfirmNewPassword");
 const strengthBar      = document.getElementById("strengthBar");
 const strengthText     = document.getElementById("strengthText");
 
-// Estado interno
-let verifiedEmail = "";
-// Código mock — en Firebase esto no existe (lo gestiona el link del email)
-const MOCK_CODE = "123456";
+let verifiedEmail  = "";
 let resendCooldown = null;
 
 // ── Navegación ────────────────────────────────────────────────
 function goToStep(n) {
   steps.forEach((s, i) => s.classList.toggle("active", i === n - 1));
-
   dots.forEach((d, i) => {
     d.classList.remove("active", "completed");
     if (i < n - 1) {
@@ -68,14 +54,12 @@ function goToStep(n) {
       d.querySelector(".dot").textContent = i + 1;
     }
   });
-
   connectors.forEach((c, i) => c.classList.toggle("completed", i < n - 1));
 }
 
 // ── Paso 1: Enviar enlace ─────────────────────────────────────
 sendBtn.addEventListener("click", async () => {
   const email = emailInput.value.trim();
-
   if (!isValidEmail(email)) {
     showError(emailInput, emailError, "Ingresa un correo válido.");
     return;
@@ -86,13 +70,8 @@ sendBtn.addEventListener("click", async () => {
   try {
     await resetPassword(email);
     verifiedEmail = email;
-
-    // Mostrar banner de éxito
     successBanner.classList.add("visible");
-
-    // Avanzar al paso 2 tras un momento para que el usuario vea el banner
     setTimeout(() => goToStep(2), 1200);
-
   } catch (err) {
     showError(emailInput, emailError, getAuthErrorMessage(err.code));
   } finally {
@@ -102,54 +81,56 @@ sendBtn.addEventListener("click", async () => {
 
 emailInput.addEventListener("input", () => clearError(emailInput, emailError));
 
-// ── Paso 2: Verificar código ──────────────────────────────────
-verifyBtn.addEventListener("click", () => {
-  const code = codeInput.value.trim();
-
-  if (code.length !== 6) {
-    showError(codeInput, codeError, "El código debe tener 6 dígitos.");
-    return;
+// ── Paso 2: "Revisa tu correo" (decorativo) ───────────────────
+// Actualizamos el contenido del paso 2 para que explique el flujo real
+window.addEventListener("DOMContentLoaded", () => {
+  const step2 = document.getElementById("recoverStep2");
+  if (step2) {
+    // Reemplazar el input de código por un mensaje informativo
+    const codeGroup = codeInput?.closest(".form-group");
+    if (codeGroup) {
+      codeGroup.innerHTML = `
+        <div style="
+          background: rgba(255,255,255,0.04);
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius-md);
+          padding: 1.25rem;
+          text-align: center;
+          line-height: 1.7;
+          color: var(--color-text-muted);
+          font-size: 0.88rem;
+        ">
+          📧 <strong style="color: var(--color-text-primary);">Revisa tu bandeja de entrada</strong><br>
+          Enviamos un enlace de recuperación a<br>
+          <span id="emailDisplay" style="color: var(--color-accent-bright); font-weight:600;"></span><br><br>
+          Haz clic en el enlace del correo para cambiar tu contraseña.<br>
+          <small style="color: var(--color-text-dim);">Puede tardar unos minutos. Revisa también tu carpeta de spam.</small>
+        </div>
+      `;
+    }
   }
+});
 
-  // ── MOCK: compara con código fijo ─────────────────────────
-  if (code !== MOCK_CODE) {
-    showError(codeInput, codeError, "Código incorrecto. Inténtalo de nuevo.");
-    return;
-  }
-  // ── FIREBASE: aquí no habrá código; el link valida solo ───
-  // El paso 2 completo se elimina cuando uses Firebase.
-
-  clearError(codeInput, codeError);
+verifyBtn?.addEventListener("click", () => {
+  // Actualizar el email display antes de avanzar
+  const display = document.getElementById("emailDisplay");
+  if (display) display.textContent = verifiedEmail;
   goToStep(3);
 });
 
-backBtn2.addEventListener("click", () => {
-  codeInput.value = "";
-  clearError(codeInput, codeError);
+backBtn2?.addEventListener("click", () => {
   successBanner.classList.remove("visible");
   goToStep(1);
 });
 
-codeInput.addEventListener("input", () => {
-  // Solo dígitos
-  codeInput.value = codeInput.value.replace(/\D/g, "").slice(0, 6);
-  clearError(codeInput, codeError);
-});
-
-// Reenvío con cooldown de 60 segundos
-resendBtn.addEventListener("click", async () => {
+// Reenvío con cooldown
+resendBtn?.addEventListener("click", async () => {
   if (resendCooldown) return;
   resendBtn.disabled = true;
-
-  try {
-    await resetPassword(verifiedEmail);
-  } catch {
-    // Si falla silenciosamente, el usuario puede intentar de nuevo
-  }
+  try { await resetPassword(verifiedEmail); } catch {}
 
   let seconds = 60;
   resendBtn.textContent = `Reenviar (${seconds}s)`;
-
   resendCooldown = setInterval(() => {
     seconds--;
     resendBtn.textContent = `Reenviar (${seconds}s)`;
@@ -162,41 +143,30 @@ resendBtn.addEventListener("click", async () => {
   }, 1000);
 });
 
-// ── Paso 3: Nueva contraseña ──────────────────────────────────
-backBtn3.addEventListener("click", () => {
-  newPassInput.value = "";
-  confirmPassInput.value = "";
-  clearError(newPassInput,     newPassError);
-  clearError(confirmPassInput, confirmPassError);
-  resetStrength();
+// ── Paso 3: Confirmación ──────────────────────────────────────
+backBtn3?.addEventListener("click", () => {
   goToStep(2);
 });
 
-newPassInput.addEventListener("input", () => {
+newPassInput?.addEventListener("input", () => {
   const val = newPassInput.value;
   const { level, label } = getPasswordStrength(val);
-
   strengthBar.dataset.level  = val ? level : "";
   strengthText.dataset.level = val ? level : "";
   strengthText.textContent   = val ? label : "-";
-
   updateReq("req-length",    val.length >= 8);
   updateReq("req-uppercase", /[A-Z]/.test(val));
   updateReq("req-number",    /[0-9]/.test(val));
   updateReq("req-special",   /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(val));
-
   clearError(newPassInput, newPassError);
 });
 
-confirmPassInput.addEventListener("input", () => clearError(confirmPassInput, confirmPassError));
+confirmPassInput?.addEventListener("input", () => clearError(confirmPassInput, confirmPassError));
+toggleNew?.addEventListener("click",     () => toggleVisibility(newPassInput,     toggleNew));
+toggleConfirm?.addEventListener("click", () => toggleVisibility(confirmPassInput, toggleConfirm));
 
-toggleNew.addEventListener("click",     () => toggleVisibility(newPassInput,     toggleNew));
-toggleConfirm.addEventListener("click", () => toggleVisibility(confirmPassInput, toggleConfirm));
-
-// Submit paso 3
-document.getElementById("recoverForm").addEventListener("submit", async (e) => {
+document.getElementById("recoverForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
-
   const newPass     = newPassInput.value;
   const confirmPass = confirmPassInput.value;
   let valid = true;
@@ -205,42 +175,27 @@ document.getElementById("recoverForm").addEventListener("submit", async (e) => {
     showError(newPassInput, newPassError, "La contraseña no cumple los requisitos mínimos.");
     valid = false;
   }
-
   if (newPass !== confirmPass) {
     showError(confirmPassInput, confirmPassError, "Las contraseñas no coinciden.");
     valid = false;
   }
-
   if (!valid) return;
 
   const submitBtn = e.target.querySelector('[type="submit"]');
-  setLoading(submitBtn, true, "Guardando…");
+  setLoading(submitBtn, true, "Listo…");
 
-  try {
-    // ── MOCK ─────────────────────────────────────────────────
-    await _delay(900);
-    // ── FIREBASE — descomentar cuando esté listo ─────────────
-    // El oobCode llega en la URL cuando el usuario hace clic en
-    // el link del correo. Lo capturas así:
-    // const oobCode = new URLSearchParams(window.location.search).get('oobCode');
-    // await confirmPasswordReset(auth, oobCode, newPass);
-
-    // Redirigir al login con mensaje
+  // El cambio real de contraseña lo hizo Firebase cuando el usuario
+  // hizo clic en el link del correo. Este paso 3 es la confirmación visual.
+  setTimeout(() => {
     sessionStorage.setItem("floast_password_reset", "1");
     window.location.href = "login.html";
-
-  } catch (err) {
-    showError(newPassInput, newPassError, getAuthErrorMessage(err.code));
-  } finally {
-    setLoading(submitBtn, false, "Cambiar Contraseña");
-  }
+  }, 800);
 });
 
 // ── Helpers ───────────────────────────────────────────────────
 function showError(input, errorEl, message) {
   if (errorEl) errorEl.textContent = message;
   input.closest(".form-group")?.classList.add("has-error");
-  input.closest(".form-group")?.classList.remove("has-success");
 }
 
 function clearError(input, errorEl) {
@@ -266,19 +221,6 @@ function updateReq(id, met) {
   el.querySelector(".check").textContent = met ? "✓" : "✗";
 }
 
-function resetStrength() {
-  strengthBar.dataset.level  = "";
-  strengthText.dataset.level = "";
-  strengthText.textContent   = "-";
-  ["req-length","req-uppercase","req-number","req-special"].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.classList.remove("met");
-      el.querySelector(".check").textContent = "✗";
-    }
-  });
-}
-
 function getPasswordStrength(password) {
   let score = 0;
   if (password.length >= 8)   score++;
@@ -291,8 +233,4 @@ function getPasswordStrength(password) {
 
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-function _delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
