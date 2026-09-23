@@ -100,3 +100,9 @@ export function getAuthErrorMessage(code) {
   };
   return messages[code] ?? "Ocurrió un error inesperado. Intenta de nuevo.";
 }
+
+/** Obtiene el usuario actual de forma síncrona */
+export function getCurrentUser() {
+  // auth ya lo tienes importado arriba desde "./firebase.js"
+  return auth.currentUser; 
+}

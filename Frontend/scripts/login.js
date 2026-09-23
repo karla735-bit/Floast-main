@@ -7,18 +7,18 @@
 import { loginUser, onAuthChange, getAuthErrorMessage } from "./auth.js";
 
 // ── Elementos del DOM ─────────────────────────────────────────
-const form          = document.getElementById("loginForm");
-const emailInput    = document.getElementById("loginEmail");
+const form = document.getElementById("loginForm");
+const emailInput = document.getElementById("loginEmail");
 const passwordInput = document.getElementById("loginPassword");
-const emailError    = document.getElementById("loginEmailError");
+const emailError = document.getElementById("loginEmailError");
 const passwordError = document.getElementById("loginPasswordError");
-const submitBtn     = form.querySelector(".btn-submit");
-const toggleBtn     = document.getElementById("toggleLoginPassword");
+const submitBtn = form.querySelector(".btn-submit");
+const toggleBtn = document.getElementById("toggleLoginPassword");
 
 // ── Si ya hay sesión activa, redirige directo al dashboard ────
 onAuthChange((user) => {
   if (user) {
-    window.location.href = "dashboard.html";
+    window.location.href = "explore.html";
   }
 });
 
@@ -37,7 +37,7 @@ passwordInput.addEventListener("input", () => clearError(passwordError));
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  const email    = emailInput.value.trim();
+  const email = emailInput.value.trim();
   const password = passwordInput.value;
 
   // Validación local antes de llamar al servidor
@@ -67,17 +67,23 @@ form.addEventListener("submit", async (e) => {
   try {
     const { user } = await loginUser(email, password);
 
-    // Guardar sesión en sessionStorage (el mock lo usa; Firebase lo maneja solo)
-    sessionStorage.setItem("floast_user", JSON.stringify({
-      email: user.email,
-      name:  user.name ?? user.displayName ?? "",
-    }));
+    sessionStorage.setItem(
+      "floast_user",
+      JSON.stringify({
+        email: user.email,
+        name: user.name ?? user.displayName ?? "",
+      }),
+    );
 
-    // Redirigir al dashboard
-    window.location.href = "dashboard.html";
-
+    // --- NUEVA LÓGICA DE REDIRECCIÓN ---
+    const redirectTarget = sessionStorage.getItem("redirect_after_login");
+    if (redirectTarget) {
+      sessionStorage.removeItem("redirect_after_login");
+      window.location.href = redirectTarget; // Va a la propiedad o a publicar
+    } else {
+      window.location.href = "explore.html"; // Redirección por defecto
+    }
   } catch (err) {
-    // Muestra el error en el campo correspondiente
     const message = getAuthErrorMessage(err.code);
 
     if (err.code === "auth/invalid-email") {
@@ -85,7 +91,6 @@ form.addEventListener("submit", async (e) => {
     } else {
       showError(passwordError, message);
     }
-
   } finally {
     setLoading(false);
   }

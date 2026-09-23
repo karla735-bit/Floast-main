@@ -2,7 +2,12 @@
 //  FLOAST — dashboard.js
 // ============================================================
 
-import { getProperties, addProperty, updateProperty, deleteProperty } from "./propertyService.js";
+import {
+  getProperties,
+  addProperty,
+  updateProperty,
+  deleteProperty,
+} from "./propertyService.js";
 import { onAuthChange, logoutUser } from "./auth.js";
 import { openProfileModal } from "./profile.js";
 import { getUserPlan, canAddProperty } from "./planService.js";
@@ -10,45 +15,69 @@ import { renderPlanBadge, showLimitModal } from "./planGate.js";
 
 // ── Auth ──────────────────────────────────────────────────────
 onAuthChange(async (user) => {
-  if (!user) { window.location.href = "login.html"; return; }
+  if (!user) {
+    window.location.href = "login.html";
+    return;
+  }
 
   // Intentar cargar perfil completo desde Firestore
   try {
     const { db } = await import("./firebase.js");
-    const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js");
+    const { doc, getDoc } =
+      await import("https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js");
     const snap = await getDoc(doc(db, "users", user.uid));
     const profile = snap.exists() ? snap.data() : {};
     const fullUser = { ...user, ...profile };
     sessionStorage.setItem("floast_user", JSON.stringify(fullUser));
-    updateHeaderUser(fullUser);
-  } catch {
+
+    updateHeaderUser(fullUser); // Actualiza la UI de arriba
+
+    // --- ¡NUEVO! AQUÍ CARGAMOS LAS PROPIEDADES ---
+    allProperties = await getProperties();
+    renderGrid(allProperties);
+  } catch (error) {
+    console.error("Error al cargar perfil de usuario:", error);
     updateHeaderUser(user);
+
+    // --- ¡NUEVO! TAMBIÉN LAS CARGAMOS AQUÍ POR SI FALLA EL PERFIL PERO SÍ HAY SESIÓN ---
+    allProperties = await getProperties();
+    renderGrid(allProperties);
   }
 });
 
 function updateHeaderUser(user) {
   const name = user.name || user.displayName || user.email || "Usuario";
-  document.getElementById("userName").textContent       = name;
+  document.getElementById("userName").textContent = name;
   document.getElementById("avatarInitials").textContent = getInitials(name);
+  // Extraemos el plan del usuario (si no tiene, por defecto ponemos "Spark")
+  const userPlan = user.plan ? user.plan.toUpperCase() : "SPARK";
+
+  // Lo inyectamos en el HTML junto con el texto original
+  document.getElementById("userRole").textContent =
+    `Plan ${userPlan} · Gestión de Propiedades`;
 
   // Mostrar foto de perfil si tiene avatar guardado
-  const avatarEl  = document.getElementById("avatarBtn");
-  const initialsEl= document.getElementById("avatarInitials");
-  let imgEl       = document.getElementById("avatarHeaderImg");
+  const avatarEl = document.getElementById("avatarBtn");
+  const initialsEl = document.getElementById("avatarInitials");
+  let imgEl = document.getElementById("avatarHeaderImg");
 
   if (user.avatar) {
     if (!imgEl) {
       imgEl = document.createElement("img");
-      imgEl.id        = "avatarHeaderImg";
-      imgEl.alt       = "Avatar";
-      imgEl.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:50%;position:absolute;inset:0;";
+      imgEl.id = "avatarHeaderImg";
+      imgEl.alt = "Avatar";
+      imgEl.style.cssText =
+        "width:100%;height:100%;object-fit:cover;border-radius:50%;position:absolute;inset:0;";
       avatarEl.style.position = "relative";
       avatarEl.appendChild(imgEl);
     }
-    imgEl.src          = "../assets/resources/" + user.avatar;
-    imgEl.hidden       = false;
+    imgEl.src = "../assets/resources/" + user.avatar;
+    imgEl.hidden = false;
     initialsEl.style.opacity = "0";
-    imgEl.onerror = () => { imgEl.hidden = true; initialsEl.style.opacity = "1"; };
+    imgEl.onerror = () => {
+      imgEl.hidden = true;
+      initialsEl.style.opacity = "1";
+    };
   } else {
     if (imgEl) imgEl.hidden = true;
     initialsEl.style.opacity = "1";
@@ -56,7 +85,7 @@ function updateHeaderUser(user) {
 }
 
 // ── DOM ───────────────────────────────────────────────────────
-const grid        = document.getElementById("propertiesGrid");
+const grid = document.getElementById("propertiesGrid");
 
 // ── Cerrar sesión ─────────────────────────────────────────────
 document.getElementById("btnLogout").addEventListener("click", async () => {
@@ -76,75 +105,75 @@ document.getElementById("avatarBtn").addEventListener("click", () => {
   });
 });
 
-const addCard     = document.getElementById("btnAddCard");
-const btnNew      = document.getElementById("btnNewProperty");
+const addCard = document.getElementById("btnAddCard");
+const btnNew = document.getElementById("btnNewProperty");
 const btnEmptyNew = document.getElementById("btnEmptyNew");
 const searchInput = document.getElementById("searchInput");
 
 // Modal propiedad
-const modalProperty       = document.getElementById("modalProperty");
-const modalTitle          = document.getElementById("modalTitle");
-const modalClose          = document.getElementById("modalClose");
-const modalCancel         = document.getElementById("modalCancel");
-const propertyForm        = document.getElementById("propertyForm");
-const propIdInput         = document.getElementById("propertyId");
-const propStepsIndicator  = document.getElementById("propStepsIndicator");
+const modalProperty = document.getElementById("modalProperty");
+const modalTitle = document.getElementById("modalTitle");
+const modalClose = document.getElementById("modalClose");
+const modalCancel = document.getElementById("modalCancel");
+const propertyForm = document.getElementById("propertyForm");
+const propIdInput = document.getElementById("propertyId");
+const propStepsIndicator = document.getElementById("propStepsIndicator");
 
 // Paso 1
-const propStep1      = document.getElementById("propStep1");
-const typeVivienda   = document.getElementById("typeVivienda");
-const typeEdificio   = document.getElementById("typeEdificio");
-const buildingTypeRow= document.getElementById("buildingTypeRow");
+const propStep1 = document.getElementById("propStep1");
+const typeVivienda = document.getElementById("typeVivienda");
+const typeEdificio = document.getElementById("typeEdificio");
+const buildingTypeRow = document.getElementById("buildingTypeRow");
 const buildingNormal = document.getElementById("buildingNormal");
-const buildingHibrido= document.getElementById("buildingHibrido");
-const step1Next      = document.getElementById("step1Next");
+const buildingHibrido = document.getElementById("buildingHibrido");
+const step1Next = document.getElementById("step1Next");
 
 // Paso 2
-const propStep2      = document.getElementById("propStep2");
-const rentCompleto   = document.getElementById("rentCompleto");
+const propStep2 = document.getElementById("propStep2");
+const rentCompleto = document.getElementById("rentCompleto");
 const rentIndividual = document.getElementById("rentIndividual");
-const step2Back      = document.getElementById("step2Back");
-const step2Next      = document.getElementById("step2Next");
+const step2Back = document.getElementById("step2Back");
+const step2Next = document.getElementById("step2Next");
 
 // Paso 3
-const propStep3        = document.getElementById("propStep3");
-const propName         = document.getElementById("propName");
-const propLocation     = document.getElementById("propLocation");
-const propPriceGroup   = document.getElementById("propPriceGroup");
-const propPrice        = document.getElementById("propPrice");
-const propStatus       = document.getElementById("propStatus");
-const propDescription  = document.getElementById("propDescription");
-const propHabCount     = document.getElementById("propHabCount");
-const propHabLabel     = document.getElementById("propHabLabel");
-const propLocalGroup   = document.getElementById("propLocalGroup");
-const propLocalCount   = document.getElementById("propLocalCount");
-const step3Back        = document.getElementById("step3Back");
-const modalSubmit      = document.getElementById("modalSubmit");
+const propStep3 = document.getElementById("propStep3");
+const propName = document.getElementById("propName");
+const propLocation = document.getElementById("propLocation");
+const propPriceGroup = document.getElementById("propPriceGroup");
+const propPrice = document.getElementById("propPrice");
+const propStatus = document.getElementById("propStatus");
+const propDescription = document.getElementById("propDescription");
+const propHabCount = document.getElementById("propHabCount");
+const propHabLabel = document.getElementById("propHabLabel");
+const propLocalGroup = document.getElementById("propLocalGroup");
+const propLocalCount = document.getElementById("propLocalCount");
+const step3Back = document.getElementById("step3Back");
+const modalSubmit = document.getElementById("modalSubmit");
 
 // Paso edición
-const propStepEdit         = document.getElementById("propStepEdit");
-const editPropName         = document.getElementById("editPropName");
-const editPropLocation     = document.getElementById("editPropLocation");
-const editPriceGroup       = document.getElementById("editPriceGroup");
-const editPropPrice        = document.getElementById("editPropPrice");
-const editPropStatus       = document.getElementById("editPropStatus");
-const editPropDescription  = document.getElementById("editPropDescription");
-const editPropHabCount     = document.getElementById("editPropHabCount");
-const editHabLabel         = document.getElementById("editHabLabel");
-const editLocalGroup       = document.getElementById("editLocalGroup");
-const editPropLocalCount   = document.getElementById("editPropLocalCount");
-const editSubmit           = document.getElementById("editSubmit");
+const propStepEdit = document.getElementById("propStepEdit");
+const editPropName = document.getElementById("editPropName");
+const editPropLocation = document.getElementById("editPropLocation");
+const editPriceGroup = document.getElementById("editPriceGroup");
+const editPropPrice = document.getElementById("editPropPrice");
+const editPropStatus = document.getElementById("editPropStatus");
+const editPropDescription = document.getElementById("editPropDescription");
+const editPropHabCount = document.getElementById("editPropHabCount");
+const editHabLabel = document.getElementById("editHabLabel");
+const editLocalGroup = document.getElementById("editLocalGroup");
+const editPropLocalCount = document.getElementById("editPropLocalCount");
+const editSubmit = document.getElementById("editSubmit");
 
 // Modal eliminar
-const modalDelete    = document.getElementById("modalDelete");
-const deleteClose    = document.getElementById("deleteClose");
-const deleteCancel   = document.getElementById("deleteCancel");
-const deleteConfirm  = document.getElementById("deleteConfirm");
+const modalDelete = document.getElementById("modalDelete");
+const deleteClose = document.getElementById("deleteClose");
+const deleteCancel = document.getElementById("deleteCancel");
+const deleteConfirm = document.getElementById("deleteConfirm");
 const deletePropName = document.getElementById("deletePropName");
 
 // ── Estado del formulario de nueva propiedad ──────────────────
 let formState = { type: null, buildingType: null, rentMode: null };
-let allProperties  = [];
+let allProperties = [];
 let deleteTargetId = null;
 
 // ── Iconos por tipo ───────────────────────────────────────────
@@ -152,7 +181,11 @@ const TYPE_ICONS = { vivienda: "house", edificio: "building-2" };
 const TYPE_LABELS = { vivienda: "Vivienda", edificio: "Edificio" };
 const RENT_LABELS = { completo: "Completo", individual: "Por unidades" };
 const BUILDING_LABELS = { normal: "Normal", hibrido: "Híbrido" };
-const STATUS_LABELS = { disponible: "Disponible", rentada: "Rentada", mantenimiento: "Mantenimiento" };
+const STATUS_LABELS = {
+  disponible: "Disponible",
+  rentada: "Rentada",
+  mantenimiento: "Mantenimiento",
+};
 
 // ── Inicialización ────────────────────────────────────────────
 async function init() {
@@ -165,11 +198,11 @@ async function init() {
     console.error("Error cargando propiedades:", err);
   }
 }
-init();
+//init();
 
 // ── Renderizado grid ──────────────────────────────────────────
 function renderGrid(properties) {
-  grid.querySelectorAll(".property-card").forEach(c => c.remove());
+  grid.querySelectorAll(".property-card").forEach((c) => c.remove());
   properties.forEach((prop, i) => {
     const card = buildCard(prop, i);
     grid.insertBefore(card, addCard);
@@ -183,16 +216,26 @@ function buildCard(prop, index) {
   card.dataset.id = prop.id;
   card.style.animationDelay = `${index * 60}ms`;
 
-  const icon         = TYPE_ICONS[prop.type] || "building";
-  const typeLabel    = TYPE_LABELS[prop.type] || prop.type;
-  const rentLabel    = RENT_LABELS[prop.rentMode] || "";
-  const buildLabel   = prop.buildingType ? ` · ${BUILDING_LABELS[prop.buildingType]}` : "";
-  const priceStr     = prop.rentMode === "completo"
-    ? `$${Number(prop.price).toLocaleString("es-MX")}<span>/ mes</span>`
-    : `<span style="font-size:0.78rem;color:var(--color-text-dim)">Precio por unidad</span>`;
+  // --- EL TRUCO ESTÁ AQUÍ ---
+  // Convertimos lo que viene de Java a minúsculas ("VIVIENDA" -> "vivienda")
+  const safeType = prop.type ? prop.type.toLowerCase() : "vivienda";
 
+  // Usamos 'safeType' en lugar de 'prop.type' para que coincida con tus diccionarios
+  const icon = TYPE_ICONS[safeType] || "building";
+  const typeLabel = TYPE_LABELS[safeType] || safeType;
+
+  const rentLabel = RENT_LABELS[prop.rentMode] || "";
+  const buildLabel = prop.buildingType
+    ? ` · ${BUILDING_LABELS[prop.buildingType]}`
+    : "";
+  const priceStr =
+    prop.rentMode === "completo"
+      ? `$${Number(prop.price).toLocaleString("es-MX")}<span>/ mes</span>`
+      : `<span style="font-size:0.78rem;color:var(--color-text-dim)">Precio por unidad</span>`;
+
+  // Asegúrate de inyectar 'safeType' en el data-type para que tu CSS aplique los colores correctos
   card.innerHTML = `
-    <div class="card-illustration" data-type="${prop.type}">
+    <div class="card-illustration" data-type="${safeType}">
       <i data-lucide="${icon}" class="prop-icon"></i>
       <span class="status-badge" data-status="${prop.status}">${capitalize(prop.status)}</span>
     </div>
@@ -215,25 +258,38 @@ function buildCard(prop, index) {
     </div>
   `;
 
-  card.addEventListener("click", e => {
+  // ... el resto de tu código de los botones se queda intacto
+  card.addEventListener("click", (e) => {
     if (e.target.closest(".card-btn")) return;
     window.location.href = `property.html?id=${prop.id}`;
   });
-  card.querySelector(".edit-btn").addEventListener("click", e => { e.stopPropagation(); openEditModal(prop); });
-  card.querySelector(".delete-btn").addEventListener("click", e => { e.stopPropagation(); openDeleteModal(prop); });
+  card.querySelector(".edit-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    openEditModal(prop);
+  });
+  card.querySelector(".delete-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    openDeleteModal(prop);
+  });
   return card;
 }
 
 // ── Búsqueda ──────────────────────────────────────────────────
 searchInput.addEventListener("input", () => {
   const q = searchInput.value.trim().toLowerCase();
-  renderGrid(allProperties.filter(p =>
-    p.name.toLowerCase().includes(q) || p.location.toLowerCase().includes(q)
-  ));
+  renderGrid(
+    allProperties.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.location.toLowerCase().includes(q),
+    ),
+  );
 });
 
 // ── Modal nueva propiedad — pasos ─────────────────────────────
-[btnNew, btnEmptyNew, addCard].forEach(btn => btn?.addEventListener("click", handleNewPropertyClick));
+[btnNew, btnEmptyNew, addCard].forEach((btn) =>
+  btn?.addEventListener("click", handleNewPropertyClick),
+);
 
 function handleNewPropertyClick() {
   // Verificamos el límite al confirmar tipo en paso 1,
@@ -247,10 +303,16 @@ function openNewModal() {
   formState = { type: null, buildingType: null, rentMode: null };
 
   // Resetear selecciones visuales
-  [typeVivienda, typeEdificio, buildingNormal, buildingHibrido, rentCompleto, rentIndividual]
-    .forEach(b => b.classList.remove("selected"));
-  buildingTypeRow.hidden  = true;
-  propLocalGroup.hidden   = true;
+  [
+    typeVivienda,
+    typeEdificio,
+    buildingNormal,
+    buildingHibrido,
+    rentCompleto,
+    rentIndividual,
+  ].forEach((b) => b.classList.remove("selected"));
+  buildingTypeRow.hidden = true;
+  propLocalGroup.hidden = true;
 
   // Asegurar que el paso de edición esté oculto
   propStepEdit.classList.remove("active");
@@ -264,13 +326,15 @@ function openNewModal() {
 }
 
 // Paso 1: selección de tipo
-[typeVivienda, typeEdificio].forEach(btn => {
+[typeVivienda, typeEdificio].forEach((btn) => {
   btn.addEventListener("click", () => {
-    [typeVivienda, typeEdificio].forEach(b => b.classList.remove("selected"));
+    [typeVivienda, typeEdificio].forEach((b) => b.classList.remove("selected"));
     btn.classList.add("selected");
     formState.type = btn.dataset.value;
     formState.buildingType = null;
-    [buildingNormal, buildingHibrido].forEach(b => b.classList.remove("selected"));
+    [buildingNormal, buildingHibrido].forEach((b) =>
+      b.classList.remove("selected"),
+    );
 
     if (formState.type === "edificio") {
       buildingTypeRow.hidden = false;
@@ -282,20 +346,28 @@ function openNewModal() {
   });
 });
 
-[buildingNormal, buildingHibrido].forEach(btn => {
+[buildingNormal, buildingHibrido].forEach((btn) => {
   btn.addEventListener("click", () => {
-    [buildingNormal, buildingHibrido].forEach(b => b.classList.remove("selected"));
+    [buildingNormal, buildingHibrido].forEach((b) =>
+      b.classList.remove("selected"),
+    );
     btn.classList.add("selected");
     formState.buildingType = btn.dataset.value;
   });
 });
 
 step1Next.addEventListener("click", () => {
-  if (!formState.type) { alert("Selecciona el tipo de inmueble."); return; }
-  if (formState.type === "edificio" && !formState.buildingType) { alert("Selecciona el tipo de edificio."); return; }
+  if (!formState.type) {
+    alert("Selecciona el tipo de inmueble.");
+    return;
+  }
+  if (formState.type === "edificio" && !formState.buildingType) {
+    alert("Selecciona el tipo de edificio.");
+    return;
+  }
 
   // Verificar límite del plan
-  const plan   = getUserPlan();
+  const plan = getUserPlan();
   const result = canAddProperty(plan, allProperties, formState.type);
 
   if (!result.allowed) {
@@ -309,7 +381,7 @@ step1Next.addEventListener("click", () => {
         renderPlanBadge();
         openNewModal();
         goToStep(2);
-      }
+      },
     );
     return;
   }
@@ -318,9 +390,11 @@ step1Next.addEventListener("click", () => {
 });
 
 // Paso 2: modo de renta
-[rentCompleto, rentIndividual].forEach(btn => {
+[rentCompleto, rentIndividual].forEach((btn) => {
   btn.addEventListener("click", () => {
-    [rentCompleto, rentIndividual].forEach(b => b.classList.remove("selected"));
+    [rentCompleto, rentIndividual].forEach((b) =>
+      b.classList.remove("selected"),
+    );
     btn.classList.add("selected");
     formState.rentMode = btn.dataset.value;
     lucide.createIcons();
@@ -329,7 +403,10 @@ step1Next.addEventListener("click", () => {
 
 step2Back.addEventListener("click", () => goToStep(1));
 step2Next.addEventListener("click", () => {
-  if (!formState.rentMode) { alert("Selecciona cómo se rentará el inmueble."); return; }
+  if (!formState.rentMode) {
+    alert("Selecciona cómo se rentará el inmueble.");
+    return;
+  }
 
   // Precio solo si completo
   propPriceGroup.hidden = formState.rentMode !== "completo";
@@ -342,7 +419,9 @@ step2Next.addEventListener("click", () => {
   }
 
   // Locales solo en edificio híbrido
-  propLocalGroup.hidden = !(formState.type === "edificio" && formState.buildingType === "hibrido");
+  propLocalGroup.hidden = !(
+    formState.type === "edificio" && formState.buildingType === "hibrido"
+  );
 
   goToStep(3);
 });
@@ -351,7 +430,9 @@ step2Next.addEventListener("click", () => {
 step3Back.addEventListener("click", () => goToStep(2));
 
 function goToStep(n) {
-  [propStep1, propStep2, propStep3].forEach((s, i) => s.classList.toggle("active", i === n - 1));
+  [propStep1, propStep2, propStep3].forEach((s, i) =>
+    s.classList.toggle("active", i === n - 1),
+  );
 
   const dots = [
     document.getElementById("pDot1"),
@@ -365,46 +446,96 @@ function goToStep(n) {
 
   dots.forEach((d, i) => {
     d.classList.remove("active", "completed");
-    if (i < n - 1)      { d.classList.add("completed"); d.querySelector(".dot").textContent = "✓"; }
-    else if (i === n - 1){ d.classList.add("active");    d.querySelector(".dot").textContent = i + 1; }
-    else                  {                               d.querySelector(".dot").textContent = i + 1; }
+    if (i < n - 1) {
+      d.classList.add("completed");
+      d.querySelector(".dot").textContent = "✓";
+    } else if (i === n - 1) {
+      d.classList.add("active");
+      d.querySelector(".dot").textContent = i + 1;
+    } else {
+      d.querySelector(".dot").textContent = i + 1;
+    }
   });
   conns.forEach((c, i) => c.classList.toggle("completed", i < n - 1));
 }
 
+import { getCurrentUser } from "./auth.js";
+
 // ── Submit nueva propiedad ────────────────────────────────────
-propertyForm.addEventListener("submit", async e => {
+propertyForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const isEdit = !!propIdInput.value;
-  if (isEdit) { await handleEdit(); return; }
+  if (isEdit) {
+    await handleEdit();
+    return;
+  }
 
   if (!validateStep3()) return;
+
+  // --- NUEVO: Obtener el usuario activo ---
+  const user = getCurrentUser(); // Asegúrate de usar la función correcta de tu auth.js
+  if (!user) {
+    alert("Debes iniciar sesión para crear propiedades.");
+    return;
+  }
 
   modalSubmit.disabled = true;
   modalSubmit.textContent = "Guardando…";
 
   const data = {
-    name:         propName.value.trim(),
-    type:         formState.type,
+    userId: user.uid, // <--- ¡VITAL! Spring Boot necesita saber de quién es para contar los límites
+    name: propName.value.trim(),
+    type: formState.type.toUpperCase(), // <--- .toUpperCase() para que coincida con el Enum de Java (CASA o EDIFICIO)
     buildingType: formState.buildingType,
-    rentMode:     formState.rentMode,
-    location:     propLocation.value.trim(),
-    price:        formState.rentMode === "completo" ? Number(propPrice.value) : null,
-    status:       propStatus.value,
-    description:  propDescription.value.trim(),
-    habCount:     Number(propHabCount.value) || 0,
-    localCount:   (formState.type === "edificio" && formState.buildingType === "hibrido")
-                  ? (Number(propLocalCount.value) || 0)
-                  : 0,
+    rentMode: formState.rentMode,
+    location: propLocation.value.trim(),
+    price: formState.rentMode === "completo" ? Number(propPrice.value) : null,
+    status: propStatus.value,
+    description: propDescription.value.trim(),
+    habCount: Number(propHabCount.value) || 0,
+    localCount:
+      formState.type === "edificio" && formState.buildingType === "hibrido"
+        ? Number(propLocalCount.value) || 0
+        : 0,
+    policies: {
+      petsAllowed: document.getElementById("propPets").checked,
+      childrenAllowed: document.getElementById("propChildren").checked,
+    },
+    amenities: {
+      hasInternet: document.getElementById("propWifi").checked,
+      hasWater: document.getElementById("propWater").checked,
+    },
   };
 
   try {
+    // Esto ahora disparará el fetch() hacia http://localhost:8080/api/properties
     const newProp = await addProperty(data);
+
     allProperties.push(newProp);
     renderGrid(allProperties);
     hideModal(modalProperty);
+
+    // Opcional: Un pequeño aviso de éxito
+    // alert("¡Propiedad creada exitosamente!");
   } catch (err) {
     console.error("Error guardando propiedad:", err);
+
+    // --- ALERTA ESTÉTICA CON SWEETALERT2 ---
+    Swal.fire({
+      icon: "warning",
+      title: "Límite de Plan",
+      text: err.message,
+      background: "#1a1a1a", // Un gris casi negro para combinar con tu fondo
+      color: "#ffffff", // Texto en blanco para que resalte
+      iconColor: "#ea580c", // El ícono de advertencia en naranja
+      confirmButtonText: "Entendido",
+      confirmButtonColor: "#ea580c", // El botón en naranja vibrante
+      customClass: {
+        popup: "rounded-2xl border border-gray-700", // Bordes redondeados y un contorno sutil
+        title: "text-xl font-bold",
+        confirmButton: "font-bold rounded-lg px-6 py-2",
+      },
+    });
   } finally {
     modalSubmit.disabled = false;
     modalSubmit.textContent = "Guardar Propiedad";
@@ -413,14 +544,38 @@ propertyForm.addEventListener("submit", async e => {
 
 function validateStep3() {
   let valid = true;
-  if (!propName.value.trim())     { setErr("propName","propNameError","Obligatorio."); valid=false; } else clearErr("propName","propNameError");
-  if (!propLocation.value.trim()) { setErr("propLocation","propLocationError","Obligatorio."); valid=false; } else clearErr("propLocation","propLocationError");
-  if (!propHabCount.value || Number(propHabCount.value) < 1) { setErr("propHabCount","propHabCountError","Ingresa al menos 1."); valid=false; } else clearErr("propHabCount","propHabCountError");
-  if (formState.type === "edificio" && formState.buildingType === "hibrido" && (!propLocalCount.value || Number(propLocalCount.value) < 0)) {
-    setErr("propLocalCount","propLocalCountError","Ingresa el número de locales."); valid=false;
-  } else clearErr("propLocalCount","propLocalCountError");
-  if (formState.rentMode === "completo" && !propPrice.value) { setErr("propPrice","propPriceError","Ingresa el precio."); valid=false; } else clearErr("propPrice","propPriceError");
-  if (!propStatus.value) { setErr("propStatus","propStatusError","Selecciona un estado."); valid=false; } else clearErr("propStatus","propStatusError");
+  if (!propName.value.trim()) {
+    setErr("propName", "propNameError", "Obligatorio.");
+    valid = false;
+  } else clearErr("propName", "propNameError");
+  if (!propLocation.value.trim()) {
+    setErr("propLocation", "propLocationError", "Obligatorio.");
+    valid = false;
+  } else clearErr("propLocation", "propLocationError");
+  if (!propHabCount.value || Number(propHabCount.value) < 1) {
+    setErr("propHabCount", "propHabCountError", "Ingresa al menos 1.");
+    valid = false;
+  } else clearErr("propHabCount", "propHabCountError");
+  if (
+    formState.type === "edificio" &&
+    formState.buildingType === "hibrido" &&
+    (!propLocalCount.value || Number(propLocalCount.value) < 0)
+  ) {
+    setErr(
+      "propLocalCount",
+      "propLocalCountError",
+      "Ingresa el número de locales.",
+    );
+    valid = false;
+  } else clearErr("propLocalCount", "propLocalCountError");
+  if (formState.rentMode === "completo" && !propPrice.value) {
+    setErr("propPrice", "propPriceError", "Ingresa el precio.");
+    valid = false;
+  } else clearErr("propPrice", "propPriceError");
+  if (!propStatus.value) {
+    setErr("propStatus", "propStatusError", "Selecciona un estado.");
+    valid = false;
+  } else clearErr("propStatus", "propStatusError");
   return valid;
 }
 
@@ -429,23 +584,28 @@ function openEditModal(prop) {
   propIdInput.value = prop.id;
   // Modo edición: limpiar pasos y mostrar solo el de edición
   propStepsIndicator.hidden = true;
-  [propStep1, propStep2, propStep3].forEach(s => s.classList.remove("active"));
+  [propStep1, propStep2, propStep3].forEach((s) =>
+    s.classList.remove("active"),
+  );
   propStepEdit.classList.remove("active"); // asegurar limpio antes de activar
   propStepEdit.classList.add("active");
 
-  editPropName.value        = prop.name;
-  editPropLocation.value    = prop.location;
-  editPropStatus.value      = prop.status;
+  editPropName.value = prop.name;
+  editPropLocation.value = prop.location;
+  editPropStatus.value = prop.status;
   editPropDescription.value = prop.description || "";
-  editPriceGroup.hidden     = prop.rentMode !== "completo";
-  editPropPrice.value       = prop.price || "";
+  editPriceGroup.hidden = prop.rentMode !== "completo";
+  editPropPrice.value = prop.price || "";
 
   // Unidades
-  editPropHabCount.value  = prop.habCount || "";
-  editHabLabel.textContent = prop.type === "vivienda" ? "Número de habitaciones" : "Número de habitaciones / cuartos";
+  editPropHabCount.value = prop.habCount || "";
+  editHabLabel.textContent =
+    prop.type === "vivienda"
+      ? "Número de habitaciones"
+      : "Número de habitaciones / cuartos";
   const isHibrido = prop.type === "edificio" && prop.buildingType === "hibrido";
-  editLocalGroup.hidden    = !isHibrido;
-  editPropLocalCount.value = isHibrido ? (prop.localCount || "") : "";
+  editLocalGroup.hidden = !isHibrido;
+  editPropLocalCount.value = isHibrido ? prop.localCount || "" : "";
 
   modalTitle.textContent = "Editar Propiedad";
   showModal(modalProperty);
@@ -455,41 +615,58 @@ async function handleEdit() {
   editSubmit.disabled = true;
   editSubmit.textContent = "Guardando…";
 
-  const id   = propIdInput.value;
-  const prop = allProperties.find(p => p.id === id);
+  const id = propIdInput.value;
+  const prop = allProperties.find((p) => p.id === id);
+  const user = getCurrentUser();
+  if (!user || !user.uid) {
+    alert("Debes iniciar sesión para editar propiedades.");
+    editSubmit.disabled = false;
+    editSubmit.textContent = "Guardar Cambios";
+    return;
+  }
 
-  const isHibrido = prop?.type === "edificio" && prop?.buildingType === "hibrido";
+  const isHibrido =
+    prop?.type === "edificio" && prop?.buildingType === "hibrido";
   const data = {
-    name:        editPropName.value.trim(),
-    location:    editPropLocation.value.trim(),
-    status:      editPropStatus.value,
+    name: editPropName.value.trim(),
+    location: editPropLocation.value.trim(),
+    status: editPropStatus.value,
     description: editPropDescription.value.trim(),
-    price:       prop?.rentMode === "completo" ? Number(editPropPrice.value) : null,
-    habCount:    Number(editPropHabCount.value) || 0,
-    localCount:  isHibrido ? (Number(editPropLocalCount.value) || 0) : 0,
+    price: prop?.rentMode === "completo" ? Number(editPropPrice.value) : null,
+    habCount: Number(editPropHabCount.value) || 0,
+    localCount: isHibrido ? Number(editPropLocalCount.value) || 0 : 0,
   };
 
   try {
-    await updateProperty(id, data);
-    const idx = allProperties.findIndex(p => p.id === id);
-    if (idx !== -1) allProperties[idx] = { ...allProperties[idx], ...data };
+    const updatedProp = await updateProperty(id, data, user.uid);
+    const idx = allProperties.findIndex((p) => p.id === id);
+    if (idx !== -1) {
+      allProperties[idx] = { ...allProperties[idx], ...(updatedProp || data) };
+    }
     renderGrid(allProperties);
     hideModal(modalProperty);
   } catch (err) {
     console.error("Error editando propiedad:", err);
+    alert(err.message || "No se pudo actualizar la propiedad.");
   } finally {
     editSubmit.disabled = false;
     editSubmit.textContent = "Guardar Cambios";
   }
 }
 
-[modalClose, modalCancel].forEach(btn => btn?.addEventListener("click", () => {
-  propStepEdit.classList.remove("active");
-  [propStep1, propStep2, propStep3].forEach(s => s.classList.remove("active"));
-  propStepsIndicator.hidden = false;
-  hideModal(modalProperty);
-}));
-modalProperty.addEventListener("click", e => { if (e.target === modalProperty) hideModal(modalProperty); });
+[modalClose, modalCancel].forEach((btn) =>
+  btn?.addEventListener("click", () => {
+    propStepEdit.classList.remove("active");
+    [propStep1, propStep2, propStep3].forEach((s) =>
+      s.classList.remove("active"),
+    );
+    propStepsIndicator.hidden = false;
+    hideModal(modalProperty);
+  }),
+);
+modalProperty.addEventListener("click", (e) => {
+  if (e.target === modalProperty) hideModal(modalProperty);
+});
 
 // ── Modal eliminar ────────────────────────────────────────────
 function openDeleteModal(prop) {
@@ -498,20 +675,35 @@ function openDeleteModal(prop) {
   showModal(modalDelete);
 }
 
-[deleteClose, deleteCancel].forEach(btn => btn.addEventListener("click", () => { deleteTargetId = null; hideModal(modalDelete); }));
-modalDelete.addEventListener("click", e => { if (e.target === modalDelete) hideModal(modalDelete); });
+[deleteClose, deleteCancel].forEach((btn) =>
+  btn.addEventListener("click", () => {
+    deleteTargetId = null;
+    hideModal(modalDelete);
+  }),
+);
+modalDelete.addEventListener("click", (e) => {
+  if (e.target === modalDelete) hideModal(modalDelete);
+});
 
 deleteConfirm.addEventListener("click", async () => {
   if (!deleteTargetId) return;
   deleteConfirm.disabled = true;
   deleteConfirm.textContent = "Eliminando…";
+  const user = getCurrentUser();
+  if (!user || !user.uid) {
+    alert("Debes iniciar sesión para eliminar propiedades.");
+    deleteConfirm.disabled = false;
+    deleteConfirm.textContent = "Sí, eliminar";
+    return;
+  }
   try {
-    await deleteProperty(deleteTargetId);
-    allProperties = allProperties.filter(p => p.id !== deleteTargetId);
+    await deleteProperty(deleteTargetId, user.uid);
+    allProperties = allProperties.filter((p) => p.id !== deleteTargetId);
     renderGrid(allProperties);
     hideModal(modalDelete);
   } catch (err) {
     console.error("Error eliminando:", err);
+    alert(err.message || "No se pudo eliminar la propiedad.");
   } finally {
     deleteConfirm.disabled = false;
     deleteConfirm.textContent = "Sí, eliminar";
@@ -520,17 +712,60 @@ deleteConfirm.addEventListener("click", async () => {
 });
 
 // ── Escape ────────────────────────────────────────────────────
-document.addEventListener("keydown", e => {
+document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     if (!modalProperty.hidden) hideModal(modalProperty);
-    if (!modalDelete.hidden)   hideModal(modalDelete);
+    if (!modalDelete.hidden) hideModal(modalDelete);
   }
 });
 
 // ── Helpers ───────────────────────────────────────────────────
-function showModal(m) { m.hidden = false; document.body.style.overflow = "hidden"; setTimeout(() => m.querySelector("input,select,button")?.focus(), 50); }
-function hideModal(m) { m.hidden = true;  document.body.style.overflow = ""; }
-function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ""; }
-function getInitials(name) { return (name||"").split(" ").filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join(""); }
-function setErr(inputId, errorId, msg) { document.getElementById(inputId)?.closest(".form-group")?.classList.add("has-error"); const e=document.getElementById(errorId); if(e) e.textContent=msg; }
-function clearErr(inputId, errorId)    { document.getElementById(inputId)?.closest(".form-group")?.classList.remove("has-error"); const e=document.getElementById(errorId); if(e) e.textContent=""; }
+function showModal(m) {
+  m.hidden = false;
+  document.body.style.overflow = "hidden";
+  setTimeout(() => m.querySelector("input,select,button")?.focus(), 50);
+}
+function hideModal(m) {
+  m.hidden = true;
+  document.body.style.overflow = "";
+}
+function capitalize(s) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
+}
+function getInitials(name) {
+  return (name || "")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join("");
+}
+function setErr(inputId, errorId, msg) {
+  document
+    .getElementById(inputId)
+    ?.closest(".form-group")
+    ?.classList.add("has-error");
+  const e = document.getElementById(errorId);
+  if (e) e.textContent = msg;
+}
+function clearErr(inputId, errorId) {
+  document
+    .getElementById(inputId)
+    ?.closest(".form-group")
+    ?.classList.remove("has-error");
+  const e = document.getElementById(errorId);
+  if (e) e.textContent = "";
+}
+// ── Auto-abrir modal si viene de explorar ─────────────────────
+document.addEventListener("DOMContentLoaded", () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get("action") === "new") {
+    // Esperamos medio segundo a que carguen los datos e iconos y abrimos el modal
+    setTimeout(() => {
+      handleNewPropertyClick(); // Esta función ya existe en tu código original
+
+      // Limpiamos la URL para que si recarga la página no se vuelva a abrir solo
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }, 500);
+  }
+});

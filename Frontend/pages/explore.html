@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOMI - Explorar Propiedades</title>
+    <link rel="stylesheet" href="../css/colors.css">
+    <link rel="stylesheet" href="../css/dashboard.css"> <!-- Reutilizamos las tarjetas base -->
+    <link rel="stylesheet" href="../css/explore.css"> <!-- CSS específico para esta vista -->
+</head>
+
+<body>
+
+    <!-- ── Header Público ─────────────────────────────────────── -->
+    <header class="dash-header explore-header">
+        <div class="header-logo">
+            <h1 class="logo-text">DOMI</h1>
+        </div>
+
+        <!-- Este contenedor cambiará con JS si hay sesión o no -->
+        <div class="header-actions" id="headerAuthActions" style="display: flex; gap: 1rem; align-items: center;">
+
+            <!-- Botón siempre visible para publicar -->
+            <button id="btnPublishProperty" class="btn-secondary"
+                style="border-color: var(--color-accent-bright); color: var(--color-accent-bright);">
+                <i data-lucide="plus"></i> Publicar Inmueble
+            </button>
+
+            <!-- Grupo de botones para usuarios NO logueados -->
+            <div id="authButtons" style="display: flex; gap: 0.75rem;">
+                <a href="login.html" class="btn-secondary" id="btnLoginPublic">Iniciar Sesión</a>
+                <a href="new_user.html" class="btn-submit" id="btnRegisterPublic">Crear Cuenta</a>
+            </div>
+
+            <!-- Grupo de botones para usuarios LOGUEADOS (oculto por defecto) -->
+            <div id="userMenu" hidden>
+                <a href="dashboard.html" class="btn-secondary">Mi Panel</a>
+            </div>
+
+        </div>
+    </header>
+
+    <!-- ── Layout Principal (Filtros + Cuadrícula) ───────────── -->
+    <div class="explore-layout">
+
+        <!-- ── Sidebar de Filtros ── -->
+        <aside class="filter-sidebar">
+            <div class="filter-header">
+                <h3><i data-lucide="filter"></i> Filtros</h3>
+                <button id="btnResetFilters" class="btn-clear" title="Limpiar filtros"><i
+                        data-lucide="rotate-ccw"></i></button>
+            </div>
+
+            <!-- Ubicación detectada -->
+            <div class="filter-section">
+                <p class="filter-title"><i data-lucide="map-pin"></i> Zona de Búsqueda</p>
+                <div class="location-status" id="locationStatus">
+                    <span class="pulse-dot"></span> Detectando ubicación...
+                </div>
+            </div>
+
+            <!-- Tipo de Inmueble -->
+            <div class="filter-section">
+                <p class="filter-title">Tipo de Inmueble</p>
+                <select id="filterType" class="filter-select">
+                    <option value="">Todos los tipos</option>
+                    <option value="CASA">Vivienda (Casa/Depto)</option>
+                    <option value="EDIFICIO">Edificio / Cuartos</option>
+                </select>
+            </div>
+
+            <!-- Políticas -->
+            <div class="filter-section">
+                <p class="filter-title">Políticas</p>
+                <label class="custom-checkbox">
+                    <input type="checkbox" id="filterPets">
+                    <span class="checkmark"></span>
+                    <span><i data-lucide="dog" class="icon-sm"></i> Acepta Mascotas</span>
+                </label>
+                <label class="custom-checkbox">
+                    <input type="checkbox" id="filterChildren">
+                    <span class="checkmark"></span>
+                    <span><i data-lucide="baby" class="icon-sm"></i> Acepta Niños</span>
+                </label>
+            </div>
+
+            <!-- Servicios Propios -->
+            <div class="filter-section">
+                <p class="filter-title">Servicios Propios</p>
+                <label class="custom-checkbox">
+                    <input type="checkbox" id="filterWifi">
+                    <span class="checkmark"></span>
+                    <span><i data-lucide="wifi" class="icon-sm"></i> Internet</span>
+                </label>
+                <label class="custom-checkbox">
+                    <input type="checkbox" id="filterWater">
+                    <span class="checkmark"></span>
+                    <span><i data-lucide="droplets" class="icon-sm"></i> Agua Propia</span>
+                </label>
+            </div>
+
+            <button id="btnApplyFilters" class="btn-submit w-full mt-4">Aplicar Filtros</button>
+        </aside>
+
+        <!-- ── Cuadrícula de Resultados ── -->
+        <main class="dash-main explore-main">
+            <div class="main-header">
+                <h2 class="section-title">Inmuebles cerca de ti</h2>
+                <span class="results-count" id="resultsCount">Cargando...</span>
+            </div>
+
+            <!-- Estado de carga -->
+            <div class="loading-state" id="exploreLoading">
+                <div class="spinner"></div>
+            </div>
+
+            <!-- Cuadrícula -->
+            <div class="properties-grid" id="exploreGrid" hidden>
+                <!-- Las tarjetas se inyectan con JS -->
+            </div>
+
+            <!-- Estado vacío -->
+            <div class="empty-state" id="exploreEmpty" hidden>
+                <i data-lucide="search-x" class="empty-icon"></i>
+                <p class="empty-title">No hay resultados</p>
+                <p class="empty-sub">Intenta ampliar tu zona de búsqueda o eliminar algunos filtros.</p>
+                <button class="btn-secondary mt-4" id="btnEmptyClear">Limpiar Filtros</button>
+            </div>
+        </main>
+
+    </div>
+
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script type="module" src="../scripts/explore.js"></script>
+</body>
+
+</html>

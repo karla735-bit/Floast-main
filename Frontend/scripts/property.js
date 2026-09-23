@@ -10,8 +10,8 @@
 // ============================================================
 
 import { getPropertyById, updateProperty } from "./propertyService.js";
-import { getUnits, updateUnit }             from "./unitService.js";
-import { onAuthChange }                     from "./auth.js";
+import { getUnits, updateUnit } from "./unitService.js";
+import { onAuthChange, getCurrentUser } from "./auth.js";
 
 onAuthChange(user => { if (!user) window.location.href = "login.html"; });
 
@@ -20,63 +20,125 @@ const propId = params.get("id");
 if (!propId) window.location.href = "dashboard.html";
 
 // ── DOM ───────────────────────────────────────────────────────
-const loadingScreen   = document.getElementById("loadingScreen");
-const propMain        = document.getElementById("propMain");
-const headerName      = document.getElementById("headerPropName");
-const headerMeta      = document.getElementById("headerMeta");
+const loadingScreen = document.getElementById("loadingScreen");
+const propMain = document.getElementById("propMain");
+const headerName = document.getElementById("headerPropName");
+const headerMeta = document.getElementById("headerMeta");
 const propStatusBadge = document.getElementById("propStatusBadge");
-const multiView       = document.getElementById("multiView");
-const singleView      = document.getElementById("singleView");
-const unitsBar        = document.getElementById("unitsBar");
-const unitDetail      = document.getElementById("unitDetail");
-const singleDetail    = document.getElementById("singleDetail");
+const multiView = document.getElementById("multiView");
+const singleView = document.getElementById("singleView");
+const unitsBar = document.getElementById("unitsBar");
+const unitDetail = document.getElementById("unitDetail");
+const singleDetail = document.getElementById("singleDetail");
 
 // Modal editar propiedad
-const modalEditProp   = document.getElementById("modalEditProp");
-const editPropForm    = document.getElementById("editPropForm");
-const editPropClose   = document.getElementById("editPropClose");
-const editPropCancel  = document.getElementById("editPropCancel");
-const editPropSubmit  = document.getElementById("editPropSubmit");
+const modalEditProp = document.getElementById("modalEditProp");
+const editPropForm = document.getElementById("editPropForm");
+const editPropClose = document.getElementById("editPropClose");
+const editPropCancel = document.getElementById("editPropCancel");
+const editPropSubmit = document.getElementById("editPropSubmit");
 
 // Modal editar unidad
-const modalEditUnit   = document.getElementById("modalEditUnit");
-const editUnitForm    = document.getElementById("editUnitForm");
-const editUnitClose   = document.getElementById("editUnitClose");
-const editUnitCancel  = document.getElementById("editUnitCancel");
-const editUnitTitle   = document.getElementById("editUnitTitle");
+const modalEditUnit = document.getElementById("modalEditUnit");
+const editUnitForm = document.getElementById("editUnitForm");
+const editUnitClose = document.getElementById("editUnitClose");
+const editUnitCancel = document.getElementById("editUnitCancel");
+const editUnitTitle = document.getElementById("editUnitTitle");
 
-let currentProp  = null;
+let currentProp = null;
 let currentUnits = [];
 let activeUnitId = null;
 
-const TYPE_LABELS     = { vivienda: "Vivienda", edificio: "Edificio" };
+const TYPE_LABELS = { vivienda: "Vivienda", edificio: "Edificio" };
 const BUILDING_LABELS = { normal: "Normal", hibrido: "Híbrido" };
-const RENT_LABELS     = { completo: "Completo", individual: "Por unidades" };
+const RENT_LABELS = { completo: "Completo", individual: "Por unidades" };
 
 // ── Init ──────────────────────────────────────────────────────
 async function init() {
   try {
-    const [prop, units] = await Promise.all([
-      getPropertyById(propId),
-      getUnits(propId),
-    ]);
-
+    const prop = await getPropertyById(propId);
     if (!prop) { window.location.href = "dashboard.html"; return; }
 
-    currentProp  = prop;
-    currentUnits = units;
+    currentProp = prop;
 
-    renderHeader(prop);
-    renderContent(prop, units);
+    let generatedUnits = [];
+
+    if (prop.rentMode === "individual") {
+      const numLocales = Number(prop.localCount) || 0;
+      for (let i = 1; i <= numLocales; i++) {
+        generatedUnits.push({
+          id: `loc_${i}`,
+          category: "local",
+          label: `Local ${i}`,
+          status: "disponible",
+          price: 0
+        });
+      }
+
+      const numHabitaciones = Number(prop.habCount) || 0;
+      for (let i = 1; i <= numHabitaciones; i++) {
+        generatedUnits.push({
+          id: `hab_${i}`,
+          category: "habitacion",
+          label: `Habitación ${i}`,
+          status: "disponible",
+          price: 0
+        });
+      }
+    }
+
+    const savedUnits = await getUnits(propId);
+
+    if (savedUnits && savedUnits.length > 0) {
+      savedUnits.forEach(savedUnit => {
+        const index = generatedUnits.findIndex(u => u.id === savedUnit.id);
+        if (index !== -1) {
+          generatedUnits[index] = { ...generatedUnits[index], ...savedUnit };
+        }
+      });
+    }
+
+    currentUnits = generatedUnits;
+
+    // ==================================================================
+    // AUTO-CORRECCIÓN DE ESTADO (Sincronizado con Firebase)
+    // ==================================================================
+    const rentadasTotales = currentUnits.filter(u =>
+      (u.status && u.status.toLowerCase() === "rentada") ||
+      (u.tenant && u.tenant.name && u.tenant.name.trim() !== "")
+    ).length;
+
+    let estadoCorrecto = currentProp.status;
+
+    if (rentadasTotales === currentUnits.length && currentUnits.length > 0) {
+      estadoCorrecto = "rentada";
+    } else if (rentadasTotales < currentUnits.length) {
+      estadoCorrecto = "disponible";
+    }
+
+    if (currentProp.status !== estadoCorrecto) {
+      currentProp.status = estadoCorrecto; 
+      
+      const user = getCurrentUser();
+      if (user) {
+        updateProperty(propId, { status: estadoCorrecto }, user.uid)
+          .then(() => console.log("Estado auto-corregido en Firebase a:", estadoCorrecto))
+          .catch(err => console.error("Error sincronizando estado:", err));
+      }
+    }
+    // ==================================================================
+
+    renderHeader(currentProp);
+    renderContent(currentProp, currentUnits);
 
     loadingScreen.hidden = true;
-    propMain.hidden      = false;
+    propMain.hidden = false;
     lucide.createIcons();
 
   } catch (err) {
     console.error("Error cargando propiedad:", err);
     loadingScreen.hidden = true;
-    propMain.hidden      = false;
+    propMain.hidden = false;
   }
 }
 init();
@@ -86,9 +148,9 @@ function renderHeader(prop) {
   document.title = `Floast — ${prop.name}`;
   headerName.textContent = prop.name;
 
-  const typeLabel     = TYPE_LABELS[prop.type] || prop.type;
+  const typeLabel = TYPE_LABELS[prop.type] || prop.type;
   const buildingLabel = prop.buildingType ? ` · ${BUILDING_LABELS[prop.buildingType]}` : "";
-  const rentLabel     = RENT_LABELS[prop.rentMode] || "";
+  const rentLabel = RENT_LABELS[prop.rentMode] || "";
 
   headerMeta.innerHTML = `
     <span class="header-meta-item"><i data-lucide="tag"></i>${typeLabel}${buildingLabel}</span>
@@ -96,7 +158,7 @@ function renderHeader(prop) {
     <span class="header-meta-item"><i data-lucide="key"></i>${rentLabel}</span>
   `;
 
-  propStatusBadge.textContent    = capitalize(prop.status);
+  propStatusBadge.textContent = capitalize(prop.status);
   propStatusBadge.dataset.status = prop.status;
 }
 
@@ -105,14 +167,12 @@ function renderContent(prop, units) {
   const isCompleto = prop.rentMode === "completo";
 
   if (isCompleto) {
-    // Ficha única — sin tabs
-    multiView.hidden  = true;
+    multiView.hidden = true;
     singleView.hidden = false;
     singleDetail.innerHTML = buildSingleHTML(prop);
     bindDetailActions(singleDetail, null, true);
   } else {
-    // Con tabs de unidades
-    multiView.hidden  = false;
+    multiView.hidden = false;
     singleView.hidden = true;
     renderUnitsBar(units, prop);
     if (units.length > 0) selectUnit(units[0].id);
@@ -124,6 +184,30 @@ function buildSingleHTML(prop) {
   const priceStr = prop.price
     ? `$${Number(prop.price).toLocaleString("es-MX")}<span class="summary-price-sub">/ mes</span>`
     : `<span class="summary-price-sub">Sin precio registrado</span>`;
+
+  const hasTenant = !!prop.tenant?.name;
+  const leaseWarning = prop.tenant?.leaseEnd ? isLeaseClose(prop.tenant.leaseEnd) : false;
+
+  const tenantContent = hasTenant ? `
+    <div class="tenant-header-row">
+      <div class="tenant-avatar">${getInitials(prop.tenant.name)}</div>
+      <div>
+        <p class="tenant-name">${prop.tenant.name}</p>
+        ${prop.tenant.leaseEnd ? `<p class="tenant-since">Contrato hasta: ${formatDate(prop.tenant.leaseEnd)}</p>` : ""}
+      </div>
+    </div>
+    <div class="detail-data-list">
+      ${prop.tenant.phone ? `<div class="detail-data-row"><span class="detail-data-label"><i data-lucide="phone"></i>Teléfono</span><span class="detail-data-value">${prop.tenant.phone}</span></div>` : ""}
+      ${prop.tenant.email ? `<div class="detail-data-row"><span class="detail-data-label"><i data-lucide="mail"></i>Correo</span><span class="detail-data-value">${prop.tenant.email}</span></div>` : ""}
+    </div>
+    ${leaseWarning ? `<div class="lease-alert"><i data-lucide="alert-triangle"></i>El contrato vence en menos de 30 días.</div>` : ""}
+  ` : `
+    <div class="tenant-empty">
+      <i data-lucide="user-x"></i>
+      <p>Sin inquilino asignado</p>
+      <p style="font-size:.75rem;margin-top:.25rem">Usa el botón Editar para agregar uno</p>
+    </div>
+  `;
 
   return `
     <div class="detail-grid">
@@ -148,11 +232,7 @@ function buildSingleHTML(prop) {
           <span class="detail-card-title"><i data-lucide="user"></i>Inquilino</span>
           <button class="card-edit-btn" data-action="edit-tenant-single"><i data-lucide="pencil"></i>Editar</button>
         </div>
-        <div class="tenant-empty">
-          <i data-lucide="user-x"></i>
-          <p>Sin inquilino asignado</p>
-          <p style="font-size:.75rem;margin-top:.25rem">Usa el botón Editar para agregar uno</p>
-        </div>
+        ${tenantContent}
       </div>
     </div>
   `;
@@ -165,9 +245,8 @@ function renderUnitsBar(units, prop) {
   const isHibrido = prop.type === "edificio" && prop.buildingType === "hibrido";
 
   if (isHibrido) {
-    // Dos grupos: locales primero, luego habitaciones
-    const locales     = units.filter(u => u.category === "local");
-    const habitaciones= units.filter(u => u.category === "habitacion");
+    const locales = units.filter(u => u.category === "local");
+    const habitaciones = units.filter(u => u.category === "habitacion");
 
     if (locales.length) {
       const sep = document.createElement("span");
@@ -196,13 +275,12 @@ function renderUnitsBar(units, prop) {
 
 function buildTab(unit) {
   const tab = document.createElement("button");
-  tab.className      = "unit-tab";
-  tab.dataset.id     = unit.id;
+  tab.className = "unit-tab";
+  tab.dataset.id = unit.id;
   tab.dataset.status = unit.status;
   tab.setAttribute("role", "tab");
   tab.setAttribute("aria-selected", "false");
 
-  // Ícono diferenciado para locales
   const dotColor = unit.category === "local" ? "var(--color-warning)" : "";
   tab.innerHTML = `<span class="tab-dot" style="${dotColor ? `background:${dotColor}` : ""}"></span>${unit.label}`;
   tab.addEventListener("click", () => selectUnit(unit.id));
@@ -229,9 +307,9 @@ function selectUnit(unitId) {
 // ── HTML detalle de unidad individual ────────────────────────
 function buildUnitDetailHTML(unit) {
   const priceFormatted = unit.price ? `$${Number(unit.price).toLocaleString("es-MX")}` : "—";
-  const hasTenant      = !!unit.tenant?.name;
-  const leaseWarning   = unit.tenant?.leaseEnd ? isLeaseClose(unit.tenant.leaseEnd) : false;
-  const categoryLabel  = unit.category === "local" ? "Local comercial" : "Habitación";
+  const hasTenant = !!unit.tenant?.name;
+  const leaseWarning = unit.tenant?.leaseEnd ? isLeaseClose(unit.tenant.leaseEnd) : false;
+  const categoryLabel = unit.category === "local" ? "Local comercial" : "Habitación";
 
   return `
     <div class="detail-grid">
@@ -257,7 +335,7 @@ function buildUnitDetailHTML(unit) {
       <div class="detail-card">
         <div class="detail-card-header">
           <span class="detail-card-title"><i data-lucide="user"></i>Inquilino</span>
-          <button class="card-edit-btn" data-action="edit-unit" data-id="${unit.id}"><i data-lucide="pencil"></i>Editar</button>
+          <button class="card-edit-btn" data-action="edit-tenant-unit" data-id="${unit.id}"><i data-lucide="pencil"></i>Editar</button>
         </div>
         ${hasTenant ? `
           <div class="tenant-header-row">
@@ -296,25 +374,40 @@ function bindDetailActions(container, unit, isSingle) {
   container.querySelectorAll("[data-action='edit-unit']").forEach(btn => {
     btn.addEventListener("click", () => openEditUnitModal(unit));
   });
+  
   container.querySelectorAll("[data-action='edit-prop']").forEach(btn => {
     btn.addEventListener("click", () => openEditPropModal());
   });
+  
   container.querySelectorAll("[data-action='edit-tenant-single']").forEach(btn => {
-    btn.addEventListener("click", () => openEditPropModal());
+    btn.addEventListener("click", () => openEditTenantSingleModal());
+  });
+
+  container.querySelectorAll("[data-action='edit-tenant-unit']").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idUnidad = btn.getAttribute("data-id");
+      openEditTenantUnitModal(idUnidad);
+    });
   });
 }
 
 // ── Modal editar propiedad ────────────────────────────────────
 function openEditPropModal() {
-  document.getElementById("ePropName").value     = currentProp.name;
-  document.getElementById("ePropType").value     = currentProp.type;
-  document.getElementById("ePropLocation").value = currentProp.location;
-  document.getElementById("ePropStatus").value   = currentProp.status;
-  document.getElementById("ePropDescription").value = currentProp.description || "";
+  const eName = document.getElementById("ePropName");
+  const eType = document.getElementById("ePropType");
+  const eLoc = document.getElementById("ePropLocation");
+  const eStatus = document.getElementById("ePropStatus");
+  const eDesc = document.getElementById("ePropDescription");
 
-  // Precio solo si rentMode completo
+  if (eName) eName.value = currentProp.name || "";
+  if (eType) eType.value = currentProp.type || "";
+  if (eLoc) eLoc.value = currentProp.location || "";
+  if (eStatus) eStatus.value = currentProp.status || "disponible";
+  if (eDesc) eDesc.value = currentProp.description || "";
+
   const priceGroup = document.getElementById("ePropPriceGroup");
   if (priceGroup) priceGroup.hidden = currentProp.rentMode !== "completo";
+
   const priceInput = document.getElementById("ePropPrice");
   if (priceInput) priceInput.value = currentProp.price || "";
 
@@ -329,10 +422,18 @@ editPropForm.addEventListener("submit", async e => {
   editPropSubmit.disabled = true;
   editPropSubmit.textContent = "Guardando…";
 
+  const user = getCurrentUser();
+  if (!user || !user.uid) {
+    alert("Debes iniciar sesión para editar esta propiedad.");
+    editPropSubmit.disabled = false;
+    editPropSubmit.textContent = "Guardar Cambios";
+    return;
+  }
+
   const data = {
-    name:        document.getElementById("ePropName").value.trim(),
-    location:    document.getElementById("ePropLocation").value.trim(),
-    status:      document.getElementById("ePropStatus").value,
+    name: document.getElementById("ePropName").value.trim(),
+    location: document.getElementById("ePropLocation").value.trim(),
+    status: document.getElementById("ePropStatus").value,
     description: document.getElementById("ePropDescription").value.trim(),
   };
 
@@ -341,11 +442,10 @@ editPropForm.addEventListener("submit", async e => {
   }
 
   try {
-    await updateProperty(propId, data);
+    await updateProperty(propId, data, user.uid);
     currentProp = { ...currentProp, ...data };
     renderHeader(currentProp);
 
-    // Re-renderizar detalle si es vista completa
     if (currentProp.rentMode === "completo") {
       singleDetail.innerHTML = buildSingleHTML(currentProp);
       bindDetailActions(singleDetail, null, true);
@@ -364,17 +464,20 @@ editPropForm.addEventListener("submit", async e => {
 function openEditUnitModal(unit) {
   if (!unit) return;
   editUnitTitle.textContent = `Editar — ${unit.label}`;
-  document.getElementById("editUnitId").value   = unit.id;
-  document.getElementById("eUnitLabel").value   = unit.label;
-  document.getElementById("eUnitStatus").value  = unit.status;
-  document.getElementById("eUnitPrice").value   = unit.price || "";
-  document.getElementById("eUnitArea").value    = unit.area  || "";
-  document.getElementById("eUnitDesc").value    = unit.description || "";
-  document.getElementById("eTenantName").value  = unit.tenant?.name  || "";
+  document.getElementById("editUnitId").value = unit.id;
+  document.getElementById("eUnitLabel").value = unit.label;
+  document.getElementById("eUnitStatus").value = unit.status;
+  document.getElementById("eUnitPrice").value = unit.price || "";
+  document.getElementById("eUnitArea").value = unit.area || "";
+  document.getElementById("eUnitDesc").value = unit.description || "";
+  
+  // Reseteamos inquilino en este modal para no crear conflictos
+  document.getElementById("eTenantName").value = unit.tenant?.name || "";
   document.getElementById("eTenantPhone").value = unit.tenant?.phone || "";
   document.getElementById("eTenantEmail").value = unit.tenant?.email || "";
-  document.getElementById("eLeaseEnd").value    = unit.tenant?.leaseEnd || "";
-  document.getElementById("eUnitNotes").value   = unit.notes || "";
+  document.getElementById("eLeaseEnd").value = unit.tenant?.leaseEnd || "";
+  document.getElementById("eUnitNotes").value = unit.notes || "";
+  
   showModal(modalEditUnit);
 }
 
@@ -388,16 +491,16 @@ editUnitForm.addEventListener("submit", async e => {
 
   const unitId = document.getElementById("editUnitId").value;
   const data = {
-    label:       document.getElementById("eUnitLabel").value.trim(),
-    status:      document.getElementById("eUnitStatus").value,
-    price:       Number(document.getElementById("eUnitPrice").value) || 0,
-    area:        Number(document.getElementById("eUnitArea").value)  || null,
+    label: document.getElementById("eUnitLabel").value.trim(),
+    status: document.getElementById("eUnitStatus").value,
+    price: Number(document.getElementById("eUnitPrice").value) || 0,
+    area: Number(document.getElementById("eUnitArea").value) || null,
     description: document.getElementById("eUnitDesc").value.trim(),
-    notes:       document.getElementById("eUnitNotes").value.trim(),
+    notes: document.getElementById("eUnitNotes").value.trim(),
     tenant: {
-      name:     document.getElementById("eTenantName").value.trim(),
-      phone:    document.getElementById("eTenantPhone").value.trim(),
-      email:    document.getElementById("eTenantEmail").value.trim(),
+      name: document.getElementById("eTenantName").value.trim(),
+      phone: document.getElementById("eTenantPhone").value.trim(),
+      email: document.getElementById("eTenantEmail").value.trim(),
       leaseEnd: document.getElementById("eLeaseEnd").value || null,
     },
   };
@@ -426,10 +529,165 @@ document.addEventListener("keydown", e => {
   }
 });
 
+// ============================================================
+// MODAL INQUILINO (PROPIEDAD COMPLETA)
+// ============================================================
+const modalEditTenantSingle = document.getElementById("modalEditTenantSingle");
+const editTenantSingleForm = document.getElementById("editTenantSingleForm");
+const editTenantSingleClose = document.getElementById("editTenantSingleClose");
+const editTenantSingleCancel = document.getElementById("editTenantSingleCancel");
+
+function openEditTenantSingleModal() {
+  const tenant = currentProp.tenant || {};
+  document.getElementById("eSingleTenantName").value = tenant.name || "";
+  document.getElementById("eSingleTenantPhone").value = tenant.phone || "";
+  document.getElementById("eSingleTenantEmail").value = tenant.email || "";
+  document.getElementById("eSingleLeaseEnd").value = tenant.leaseEnd || "";
+  showModal(modalEditTenantSingle);
+}
+
+[editTenantSingleClose, editTenantSingleCancel].forEach(b => b?.addEventListener("click", () => hideModal(modalEditTenantSingle)));
+modalEditTenantSingle?.addEventListener("click", e => { if (e.target === modalEditTenantSingle) hideModal(modalEditTenantSingle); });
+
+editTenantSingleForm?.addEventListener("submit", async e => {
+  e.preventDefault();
+  const submitBtn = editTenantSingleForm.querySelector('[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Guardando...";
+
+  const user = getCurrentUser();
+
+  const tenantData = {
+    name: document.getElementById("eSingleTenantName").value.trim(),
+    phone: document.getElementById("eSingleTenantPhone").value.trim(),
+    email: document.getElementById("eSingleTenantEmail").value.trim(),
+    leaseEnd: document.getElementById("eSingleLeaseEnd").value || null,
+  };
+
+  const hasTenant = tenantData.name !== "";
+  const dataToUpdate = {
+    tenant: tenantData
+  };
+
+  try {
+    await updateProperty(propId, dataToUpdate, user.uid);
+
+    currentProp.tenant = dataToUpdate.tenant;
+    currentProp.status = dataToUpdate.tenant ? "rentada" : "disponible";
+
+    renderHeader(currentProp);
+    singleDetail.innerHTML = buildSingleHTML(currentProp);
+    bindDetailActions(singleDetail, null, true);
+    lucide.createIcons();
+
+    hideModal(modalEditTenantSingle);
+  } catch (err) {
+    console.error("Error actualizando inquilino:", err);
+    alert("Hubo un error al guardar el inquilino.");
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Guardar Inquilino";
+  }
+});
+
+
+// ============================================================
+// MODAL INQUILINO (POR UNIDADES)
+// ============================================================
+const modalEditTenantUnit = document.getElementById("modalEditTenantUnit");
+const editTenantUnitForm = document.getElementById("editTenantUnitForm");
+const editTenantUnitClose = document.getElementById("editTenantUnitClose");
+const editTenantUnitCancel = document.getElementById("editTenantUnitCancel");
+
+function openEditTenantUnitModal(unitId) {
+  const unit = currentUnits.find(u => u.id === unitId);
+  if (!unit) return;
+
+  document.getElementById("eUnitTenantId").value = unit.id;
+
+  const tenant = unit.tenant || {};
+  document.getElementById("eUnitTenantName").value = tenant.name || "";
+  document.getElementById("eUnitTenantPhone").value = tenant.phone || "";
+  document.getElementById("eUnitTenantEmail").value = tenant.email || "";
+  document.getElementById("eUnitLeaseEnd").value = tenant.leaseEnd || "";
+
+  showModal(modalEditTenantUnit);
+}
+
+[editTenantUnitClose, editTenantUnitCancel].forEach(b => b?.addEventListener("click", () => hideModal(modalEditTenantUnit)));
+modalEditTenantUnit?.addEventListener("click", e => { if (e.target === modalEditTenantUnit) hideModal(modalEditTenantUnit); });
+
+editTenantUnitForm?.addEventListener("submit", async e => {
+  e.preventDefault();
+  const submitBtn = editTenantUnitForm.querySelector('[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Guardando...";
+
+  const unitId = document.getElementById("eUnitTenantId").value;
+
+  const tenantData = {
+    name: document.getElementById("eUnitTenantName").value.trim(),
+    phone: document.getElementById("eUnitTenantPhone").value.trim(),
+    email: document.getElementById("eUnitTenantEmail").value.trim(),
+    leaseEnd: document.getElementById("eUnitLeaseEnd").value || null,
+  };
+
+  const hasTenant = tenantData.name !== "";
+  const nuevoEstado = hasTenant ? "rentada" : "disponible";
+
+  const dataToUpdate = {
+    tenant: tenantData,
+    status: nuevoEstado
+  };
+
+  try {
+    await updateUnit(propId, unitId, dataToUpdate);
+
+    const unitIndex = currentUnits.findIndex(u => u.id === unitId);
+    if (unitIndex !== -1) {
+      currentUnits[unitIndex].tenant = dataToUpdate.tenant;
+      currentUnits[unitIndex].status = nuevoEstado;
+    }
+
+    const user = getCurrentUser();
+    const rentadasCount = currentUnits.filter(u =>
+      (u.status && u.status.toLowerCase() === "rentada") ||
+      (u.tenant && u.tenant.name && u.tenant.name.trim() !== "")
+    ).length;
+
+    const totalUnits = currentUnits.length;
+    let nuevoEstadoPropiedad = currentProp.status;
+
+    if (rentadasCount === totalUnits && totalUnits > 0) {
+      nuevoEstadoPropiedad = "rentada";
+    } else if (currentProp.status && currentProp.status.toLowerCase() === "rentada" && rentadasCount < totalUnits) {
+      nuevoEstadoPropiedad = "disponible";
+    }
+
+    if (currentProp.status.toLowerCase() !== nuevoEstadoPropiedad.toLowerCase()) {
+      await updateProperty(propId, { status: nuevoEstadoPropiedad }, user.uid);
+      currentProp.status = nuevoEstadoPropiedad;
+      renderHeader(currentProp);
+    }
+
+    renderUnitsBar(currentUnits, currentProp);
+    selectUnit(unitId);
+    lucide.createIcons();
+
+    hideModal(modalEditTenantUnit);
+  } catch (err) {
+    console.error("Error actualizando inquilino de unidad:", err);
+    alert("Error al guardar el inquilino.");
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Guardar Inquilino";
+  }
+});
+
 // ── Helpers ───────────────────────────────────────────────────
 function showModal(m) { m.hidden = false; document.body.style.overflow = "hidden"; setTimeout(() => m.querySelector("input,select,button")?.focus(), 50); }
-function hideModal(m) { m.hidden = true;  document.body.style.overflow = ""; }
+function hideModal(m) { m.hidden = true; document.body.style.overflow = ""; }
 function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ""; }
-function getInitials(n) { return (n||"").split(" ").filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join(""); }
-function formatDate(d) { if (!d) return ""; return new Date(d+"T00:00:00").toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"}); }
-function isLeaseClose(d) { if (!d) return false; const diff = new Date(d)-new Date(); return diff > 0 && diff < 30*24*60*60*1000; }
+function getInitials(n) { return (n || "").split(" ").filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join(""); }
+function formatDate(d) { if (!d) return ""; return new Date(d + "T00:00:00").toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" }); }
+function isLeaseClose(d) { if (!d) return false; const diff = new Date(d) - new Date(); return diff > 0 && diff < 30 * 24 * 60 * 60 * 1000; }

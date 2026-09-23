@@ -461,3 +461,24 @@ body::after {
   cursor: not-allowed;
   pointer-events: none;
 }
+
+/* ── Botón de regreso al inicio ── */
+.btn-home-back {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  margin-bottom: 1rem;
+  transition: color 0.2s, transform 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .btn-home-back:hover {
+    color: var(--color-accent-bright);
+    transform: translateX(-3px); /* Pequeño desplazamiento hacia la izquierda */
+  }
+}

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
   <link rel="stylesheet" href="../css/colors.css">
   <link rel="stylesheet" href="../css/property.css">
 </head>
+
 <body>
 
   <!-- ── Header ─────────────────────────────────────────────── -->
@@ -110,6 +112,92 @@
     </div>
   </div>
 
+  <!--MODAL EDITAR INQUILINO COMPLETO-->
+  <div class="modal-overlay" id="modalEditTenantSingle" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="editTenantSingleTitle">
+
+      <div class="modal-header">
+        <h3 class="modal-title" id="editTenantSingleTitle">Editar Inquilino</h3>
+        <button class="modal-close" id="editTenantSingleClose" aria-label="Cerrar">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <form id="editTenantSingleForm" class="modal-form" novalidate>
+
+        <div class="form-group">
+          <label for="eSingleTenantName">Nombre del inquilino (déjalo vacío para eliminar)</label>
+          <input type="text" id="eSingleTenantName" placeholder="Ej. Juan Pérez">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="eSingleTenantPhone">Teléfono</label>
+            <input type="tel" id="eSingleTenantPhone" placeholder="Ej. 555-1234">
+          </div>
+          <div class="form-group">
+            <label for="eSingleTenantEmail">Correo electrónico</label>
+            <input type="email" id="eSingleTenantEmail" placeholder="Ej. juan@correo.com">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="eSingleLeaseEnd">Fin del contrato</label>
+          <input type="date" id="eSingleLeaseEnd">
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="editTenantSingleCancel">Cancelar</button>
+          <button type="submit" class="btn-submit" id="editTenantSingleSubmit">Guardar Inquilino</button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+  <!--MODAL EDITAR INQUILINO POR UNIDAD-->
+  <div class="modal-overlay" id="modalEditTenantUnit" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="editTenantUnitTitle">
+
+      <div class="modal-header">
+        <h3 class="modal-title" id="editTenantUnitTitle">Editar Inquilino de Unidad</h3>
+        <button class="modal-close" id="editTenantUnitClose" aria-label="Cerrar">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <form id="editTenantUnitForm" class="modal-form" novalidate>
+        <input type="hidden" id="eUnitTenantId">
+
+        <div class="form-group">
+          <label for="eUnitTenantName">Nombre del inquilino (déjalo vacío para eliminar)</label>
+          <input type="text" id="eUnitTenantName" placeholder="Ej. Juan Pérez">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="eUnitTenantPhone">Teléfono</label>
+            <input type="tel" id="eUnitTenantPhone" placeholder="Ej. 555-1234">
+          </div>
+          <div class="form-group">
+            <label for="eUnitTenantEmail">Correo electrónico</label>
+            <input type="email" id="eUnitTenantEmail" placeholder="Ej. juan@correo.com">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="eUnitLeaseEnd">Fin del contrato</label>
+          <input type="date" id="eUnitLeaseEnd">
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="editTenantUnitCancel">Cancelar</button>
+          <button type="submit" class="btn-submit">Guardar Inquilino</button>
+        </div>
+
+      </form>
+    </div>
+  </div>
   <!-- ── Modal: editar unidad ────────────────────────────────── -->
   <div class="modal-overlay" id="modalEditUnit" hidden>
     <div class="modal" role="dialog" aria-modal="true">
@@ -189,4 +277,5 @@
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script type="module" src="../scripts/property.js"></script>
 </body>
+
 </html>
