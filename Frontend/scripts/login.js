@@ -7,18 +7,18 @@
 import { loginUser, onAuthChange, getAuthErrorMessage } from "./auth.js";
 
 // ── Elementos del DOM ─────────────────────────────────────────
-const form = document.getElementById("loginForm");
-const emailInput = document.getElementById("loginEmail");
+const form          = document.getElementById("loginForm");
+const emailInput    = document.getElementById("loginEmail");
 const passwordInput = document.getElementById("loginPassword");
-const emailError = document.getElementById("loginEmailError");
+const emailError    = document.getElementById("loginEmailError");
 const passwordError = document.getElementById("loginPasswordError");
-const submitBtn = form.querySelector(".btn-submit");
-const toggleBtn = document.getElementById("toggleLoginPassword");
+const submitBtn     = form.querySelector(".btn-submit");
+const toggleBtn     = document.getElementById("toggleLoginPassword");
 
-// ── Si ya hay sesión activa, redirige directo al dashboard ────
+// ── Si ya hay sesión activa, redirige directo a la exploración ────
 onAuthChange((user) => {
   if (user) {
-    window.location.href = "explore.html";
+    window.location.href = "explore.html"; // <-- Redirección al marketplace
   }
 });
 
@@ -37,7 +37,7 @@ passwordInput.addEventListener("input", () => clearError(passwordError));
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  const email = emailInput.value.trim();
+  const email    = emailInput.value.trim();
   const password = passwordInput.value;
 
   // Validación local antes de llamar al servidor
@@ -67,25 +67,24 @@ form.addEventListener("submit", async (e) => {
   try {
     const { user } = await loginUser(email, password);
 
-    sessionStorage.setItem(
-      "floast_user",
-      JSON.stringify({
-        email: user.email,
-        name: user.name ?? user.displayName ?? "",
-      }),
-    );
+    // Guardar sesión en sessionStorage
+    sessionStorage.setItem("floast_user", JSON.stringify({
+      email: user.email,
+      name:  user.name ?? user.displayName ?? "",
+    }));
 
-    // --- NUEVA LÓGICA DE REDIRECCIÓN ---
+    // --- LÓGICA DE REDIRECCIÓN INTELIGENTE ---
     const redirectTarget = sessionStorage.getItem("redirect_after_login");
+    
     if (redirectTarget) {
       sessionStorage.removeItem("redirect_after_login");
-      window.location.href = redirectTarget; // Va a la propiedad o a publicar
+      window.location.href = redirectTarget; 
     } else {
-      window.location.href = "explore.html"; // Redirección por defecto
+      window.location.href = "explore.html"; 
     }
+
   } catch (err) {
     const message = getAuthErrorMessage(err.code);
-
     if (err.code === "auth/invalid-email") {
       showError(emailError, message);
     } else {
@@ -94,10 +93,9 @@ form.addEventListener("submit", async (e) => {
   } finally {
     setLoading(false);
   }
-});
+}); // <-- Aquí está el cierre correcto del evento submit
 
 // ── Helpers ───────────────────────────────────────────────────
-
 function showError(element, message) {
   element.textContent = message;
   element.closest(".form-group")?.classList.add("has-error");

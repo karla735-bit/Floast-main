@@ -240,28 +240,36 @@ export async function deleteProperty(id, userId) {
 }
 
 // Este será el endpoint que el de backend debe crear: GET /api/properties/public
-export async function getPublicProperties(filters = {}) {
+// Añadimos page (por defecto 0 o 1, según configure Spring Boot) y size (ej. 12 tarjetas)
+export async function getPublicProperties(filters = {}, page = 1, size = 12) {
   try {
     const url = new URL(`${API_URL}/public`);
 
-    // Si mandas coordenadas, se añaden a la URL
+    // Paginación
+    url.searchParams.append("page", page);
+    url.searchParams.append("size", size);
+
     if (filters.lat && filters.lng) {
       url.searchParams.append("lat", filters.lat);
       url.searchParams.append("lng", filters.lng);
     }
-
-    // Filtros opcionales
-    if (filters.pets) url.searchParams.append("petsAllowed", "true");
-    if (filters.children) url.searchParams.append("childrenAllowed", "true");
+    if (filters.petsAllowed) url.searchParams.append("petsAllowed", "true");
+    if (filters.childrenAllowed)
+      url.searchParams.append("childrenAllowed", "true");
     if (filters.type) url.searchParams.append("type", filters.type);
 
-    const response = await fetch(url);
-    if (!response.ok) throw new Error("Error cargando propiedades públicas");
+    if (filters.amenities && filters.amenities.length > 0) {
+      url.searchParams.append("amenities", filters.amenities.join(","));
+    }
 
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Error fetching public properties");
+
+    // Ahora esperamos un objeto con { content: [...], totalPages: X }
     return await response.json();
   } catch (error) {
-    console.error("Error en getPublicProperties:", error);
-    return [];
+    console.error("Error:", error);
+    return null;
   }
 }
 
